@@ -14,31 +14,6 @@ from variables import *
 bot = telebot.TeleBot(Token, threaded=False)
 BOT_USER = bot.get_me().id
 
-########################################################################################################################
-
-db.insert(table_users)
-db.insert(table_passports)
-db.insert(table_chats)
-db.insert(table_channels)
-db.insert(table_admin)
-db.insert(table_sans)
-db.insert(table_businesses)
-db.insert(table_rids)
-db.insert(table_meta)
-
-update_all_users()
-update_all_passports()
-update_all_chats()
-update_all_channels()
-update_all_admin()
-update_all_sans()
-update_all_businesses()
-update_all_rids()
-update_all_meta()
-
-
-########################################################################################################################
-
 
 def f_queue(m):
     """антиспам повідомлення"""
