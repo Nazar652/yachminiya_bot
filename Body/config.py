@@ -6,7 +6,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 Token = '1875045403:AAF5-WPgN1ZmK6A1Pu-Cm3UpX19pYMs5OCA'
 CREATOR = 419596848
 
-CREDENTIALS_FILE = 'creds-test.json'
+CREDENTIALS_FILE = 'credentials.json'
 spreadsheet_id = '1y7OBRqTqqLRtsNRYgsFKfcAtT0XDBWlAr_Pfo40OfmY'                    # авторизую сервісний акк
 credentials = ServiceAccountCredentials.from_json_keyfile_name(
     CREDENTIALS_FILE,
