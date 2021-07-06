@@ -369,6 +369,22 @@ def get_str_rid(id):
     return rid_out
 
 
+def update_channel_rid(rid_name):
+    if rid_name == 'Самітник':
+        return
+    rid = get_rid(rid_name)
+    rid_out = get_str_rid(rid[1])
+    bot.edit_message_text(chat_id=-1001424413839, text=rid_out, message_id=rid[5], parse_mode='HTML',
+                          disable_web_page_preview=True)
+
+
+def update_channel_business(business_name):
+    business = get_business(business_name)
+    business_out = get_str_business(business[1])
+    bot.edit_message_text(chat_id=-1001282951480, text=business_out, message_id=business[5], parse_mode='HTML',
+                          disable_web_page_preview=True)
+
+
 def get_seans_business(id, m):
     def except_bus(m):
         keyboard = types.InlineKeyboardMarkup()
@@ -896,9 +912,7 @@ def callback_inline(call):
         rid_out += f'Голова:\n<b><a href="t.me/{username}">{passport[2]} {passport[3]}</a></b>\n'
         n = bot.send_message(-1001424413839, rid_out, parse_mode='HTML').id
         new_rid(u, m, n)
-        rid_out = get_str_rid(namep)
-        bot.edit_message_text(chat_id=-1001424413839, text=rid_out, message_id=n, parse_mode='HTML',
-                              disable_web_page_preview=True)
+        update_channel_rid(namep)
         bot.edit_message_text(
             text=f'Ви успішно зареєстрували рід <a href="https://t.me/FamilyRegistry/{n}">{namep}</a>.',
             message_id=call.message.message_id, chat_id=call.message.chat.id, reply_markup=keyboard,
@@ -1035,9 +1049,7 @@ def callback_inline(call):
             insert_passport_l(passport)
             all_passports[passport[0] - 1][13] = i
         insert_rid_a(rid)
-        rid_out = get_str_rid(namep)
-        bot.edit_message_text(chat_id=-1001424413839, text=rid_out, message_id=rid[5], parse_mode='HTML',
-                              disable_web_page_preview=True)
+        update_channel_rid(rid[1])
         bot.edit_message_text(
             text=f'Ви успішно змінили назву роду на <a href="https://t.me/FamilyRegistry/{rid[5]}">{namep}</a>.',
             message_id=call.message.message_id, chat_id=call.message.chat.id, reply_markup=keyboard,
@@ -1067,9 +1079,7 @@ def callback_inline(call):
         employer[14] = time.time()
         insert_rid_a(rid)
         insert_passport_a(employer)
-        rid_out = get_str_rid(rid[1])
-        bot.edit_message_text(chat_id=ch_id, message_id=bus_id, text=rid_out, parse_mode='HTML',
-                              disable_web_page_preview=True)
+        update_channel_rid(rid[1])
         return
 
     if call.data == "new_rid_member_cancel":
@@ -1113,10 +1123,7 @@ def callback_inline(call):
         member[13] = 'Самітник'
         insert_rid_a(rid)
         insert_passport_a(member)
-        ch_id = -1001424413839
-        rid_out = get_str_rid(rid[1])
-        bot.edit_message_text(chat_id=ch_id, message_id=rid[5], text=rid_out, parse_mode='HTML',
-                              disable_web_page_preview=True)
+        update_channel_rid(rid[1])
         return
 
     if call.data[0:10] == "rid_member":
@@ -1159,10 +1166,7 @@ def callback_inline(call):
         member[13] = 'Самітник'
         insert_rid_a(rid)
         insert_passport_a(member)
-        ch_id = -1001424413839
-        rid_out = get_str_rid(rid[1])
-        bot.edit_message_text(chat_id=ch_id, message_id=rid[5], text=rid_out, parse_mode='HTML',
-                              disable_web_page_preview=True)
+        update_channel_rid(rid[1])
         return
 
     if call.data == 'business':
@@ -1659,15 +1663,19 @@ def callback_inline(call):
         keyboard.add(callback_button)
         bot.edit_message_text(f'Керування фінансами\n{business[2]}\nАктиви: {business[4]} {glas(business[4])}', message_id=call.message.message_id, chat_id=call.message.chat.id, reply_markup=keyboard)
 
-    """if call.data == 'transfer':
+    if call.data == 'transfer':
         business = get_seans_business(u.id, m)
         if business is None:
             return
         msg = f"{business[2]}\nДля переказу коштів напишіть повідомлення у наступному форматі:\n    <code>[id отримувача] [сума переказу] [призначення платежу (необов'язково)]</code>\nЯкщо ви не хочете переказувати кошти, введіть <code>СТОП</code>\nАктиви: {business[4]} {glas(business[4])}"
         bot.edit_message_text(message_id=call.message.message_id, chat_id=call.message.chat.id, text=msg,
                               parse_mode='HTML')
-
         def transfer(m):
+            nonlocal business
+            if m.text == 'СТОП':
+                bot.send_message(m.chat.id, 'Ви відмінили процедуру переказу коштів.')
+                business_f(business, m, False)
+                return
             mess = m.text.split()
             if len(mess) < 2:
                 bot.send_message(m.chat.id, 'Неправильний формат вхідних даних. Спробуйте знову.\nЯкщо ви не хочете переказувати кошти, введіть <code>СТОП</code>.', parse_mode='HTML')
@@ -1676,52 +1684,58 @@ def callback_inline(call):
             try:
                 amount_m = int(mess[1])
             except:
-                bot.send_message(m.chat.id, 'Введено хибну кількість ячок.')
+                bot.send_message(m.chat.id, 'Введено хибну кількість ячок.\nЯкщо ви не хочете переказувати кошти, введіть <code>СТОП</code>.', parse_mode='HTML')
+                bot.register_next_step_handler(m, transfer)
                 return
+
             if amount_m < 1:
                 bot.send_message(m.chat.id, 'Вкажіть додатню кількість ячок для переказу. Спробуйте знову.\nЯкщо ви не хочете переказувати кошти, введіть <code>СТОП</code>.', parse_mode='HTML')
-
-            acc_t = get_passport(mess[1])
-            pp_bus = 0
+                bot.register_next_step_handler(m, transfer)
+                return
+            acc_t = get_passport(mess[0])
+            bus = False
             if acc_t is None:
-                acc_t = get_business(mess[1])
-                pp_bus = 1
+                acc_t = get_business(mess[0])
+                bus = True
                 if acc_t is None:
                     bot.send_message(m.chat.id, 'Введено хибний ідентифікатор отримувача. Спробуйте знову.\nЯкщо ви не хочете переказувати кошти, введіть <code>СТОП</code>.', parse_mode='HTML')
+                    bot.register_next_step_handler(m, transfer)
                     return
 
-            if len(mess) > 3:
-                description = ' '.join(m.text.split()[3:])
+            if len(mess) > 2:
+                description = ' '.join(m.text.split()[2:])
             else:
                 description = None
 
-            if int(acc_g[9]) < amount_m:
-                bot.send_message(m.chat.id, f'На вашому рахунку недостатньо грошей для переказу')
+            if int(business[4]) < amount_m:
+                bot.send_message(m.chat.id, f'На рахунку підприємства {business[2]} недостатньо коштів для переказу. Спробуйте меншу суму.\nЯкщо ви не хочете переказувати кошти, введіть <code>СТОП</code>.', parse_mode='HTML')
+                bot.register_next_step_handler(m, transfer)
                 return
 
-            comm = commission(int(amount_m), 2)
+            comm = commission(int(amount_m), 1)
 
-            if int(acc_g[9]) < amount_m + comm:
+            if business[4] < amount_m + comm:
                 bot.send_message(m.chat.id,
-                                 f'У вас недостатньо коштів на рахунку для списання комісії. Спробуйте меншу суму коштів')
+                                 f'На рахунку підприємства {business[2]} недостатньо коштів для списання комісії. Спробуйте меншу суму коштів.\nЯкщо ви не хочете переказувати кошти, введіть <code>СТОП</code>.', parse_mode='HTML')
+                bot.register_next_step_handler(m, transfer)
                 return
 
-            if pp_bus == 0 or pp_bus == 2:
-                acc_g[9] = acc_g[9] - amount_m - comm
-                acc_t[9] = acc_t[9] + amount_m
-                namep = f'<a href="tg://user?id={acc_t[1]}">{acc_t[2]} {acc_t[3]}</a>'
-                money_t = acc_t[9]
-            else:
-                acc_g[9] = int(acc_g[9]) - amount_m - comm
-                acc_t[4] = int(acc_t[4]) + amount_m
-                namep = f'<a href="https://t.me/businesses_yachminiya/{acc_t[7]}">{acc_t[2]}</a>'
+            business[4] = business[4] - amount_m - comm
+            namep1 = f'<a href="https://t.me/businesses_yachminiya/{business[7]}">{business[2]}</a>'
+            if bus:
+                acc_t[4] = acc_t[4] + amount_m
+                namep2 = f'<a href="https://t.me/businesses_yachminiya/{acc_t[7]}">{acc_t[2]}</a>'
                 money_t = acc_t[4]
+            else:
+                acc_t[9] = acc_t[9] + amount_m
+                namep2 = f'<a href="tg://user?id={acc_t[1]}">{acc_t[2]} {acc_t[3]}</a>'
+                money_t = acc_t[9]
 
             msg = f'Державний Банк\n'
             msg += f'<b>Ячмінія</b>\n\n'
             msg += f'Переказ коштів\n'
-            msg += f'Відправник: <a href="tg://user?id={acc_g[1]}">{acc_g[2]} {acc_g[3]}</a> ({acc_g[9]})\n'
-            msg += f'Отримувач: {namep} ({money_t})\n'
+            msg += f'Відправник: {namep1} ({business[4]})\n'
+            msg += f'Отримувач: {namep2} ({money_t})\n'
             msg += f'Сума переказу: {amount_m} {glas(amount_m)}\n'
             msg += f'Комісія: {comm} {glas(comm)}\n'
             if description is not None:
@@ -1730,26 +1744,14 @@ def callback_inline(call):
             bot.send_message(m.chat.id, msg, parse_mode='HTML', disable_web_page_preview=True)
             # bot.send_message(-1001282951480, f'Переказ коштів\nСума переказу: {amount_m} {glas(amount_m)}')
 
-            if pp_bus == 0:
-                msg = f'Державний Банк\n'
-                msg += f'<b>Ячмінія</b>\n\n'
-                msg = f'На ваш рахунок переказали кошти\n'
-                msg += f'Відправник: <a href="tg://user?id={acc_g[1]}">{acc_g[2]} {acc_g[3]}</a> ({acc_g[9]})\n'
-                msg += f'Сума переказу: {amount_m} {glas(amount_m)}\n'
-                if description is not None:
-                    msg += f'Призначення переказу: {description}'
-                try:
-                    bot.send_message(acc_t[1], msg, parse_mode='HTML', disable_web_page_preview=True)
-                except:
-                    pass
-            elif pp_bus == 1:
+            if bus:
                 # bot.edit_message_text(get_str_business(acc_t[1]), -1001162793975, acc_t[7], parse_mode='HTML')
 
                 msg = f'Державний Банк\n'
                 msg += f'<b>Ячмінія</b>\n\n'
                 msg += f'На рахунок вашого підприємства переказали кошти\n'
-                msg += f'Відправник: <a href="tg://user?id={acc_g[1]}">{acc_g[2]} {acc_g[3]}</a> ({acc_g[9]})\n'
-                msg += f'Отримувач: {namep} ({money_t})\n'
+                msg += f'Відправник: {namep1} ({business[9]})\n'
+                msg += f'Отримувач: {namep2} ({money_t})\n'
                 msg += f'Сума переказу: {amount_m} {glas(amount_m)}\n'
                 if description is not None:
                     msg += f'Призначення переказу: {description}'
@@ -1757,16 +1759,154 @@ def callback_inline(call):
                     bot.send_message(acc_t[3], msg, parse_mode='HTML', disable_web_page_preview=True)
                 except:
                     pass
-
-            insert_passport_a(acc_g)
-            if pp_bus == 0 or pp_bus == 2:
-                insert_passport_a(acc_t)
             else:
+                msg = f'Державний Банк\n'
+                msg += f'<b>Ячмінія</b>\n\n'
+                msg = f'На ваш рахунок переказали кошти\n'
+                msg += f'Відправник: {namep1} ({business[9]})\n'
+                msg += f'Сума переказу: {amount_m} {glas(amount_m)}\n'
+                if description is not None:
+                    msg += f'Призначення переказу: {description}'
+                try:
+                    bot.send_message(acc_t[1], msg, parse_mode='HTML', disable_web_page_preview=True)
+                except:
+                    pass
+
+            business_f(business, m, False)
+            insert_business_a(business)
+            acc_g = get_passport(business[3])
+            if bus:
                 insert_business_a(acc_t)
+                acc_t = get_passport(acc_t[3])
+            else:
+                insert_passport_a(acc_t)
+            update_channel_business(business[1])
+            update_channel_rid(acc_g[13])
+            update_channel_rid(acc_t[13])
+
+        bot.register_next_step_handler(m, transfer)
+        return
+
+    if call.data == 'withdraw':
+        business = get_seans_business(u.id, m)
+        if business is None:
             return
+        acc_t = get_passport(u.id)
+        def withdraw(m):
+            nonlocal business, acc_t
+            if m.text == 'СТОП':
+                bot.send_message(m.chat.id, 'Ви відмінили процедуру зняття коштів.')
+                business_f(business, m, False)
+                return
 
-        bot.register_next_step_handler(m, transfer)"""
+            try:
+                amount_m = int(m.text)
+            except:
+                bot.send_message(m.chat.id,
+                                 'Неправильний формат вхідних даних. Спробуйте знову.\nЯкщо ви не хочете знімати кошти, введіть <code>СТОП</code>.',
+                                 parse_mode='HTML')
+                bot.register_next_step_handler(m, withdraw)
+                return
 
+            if business[4] < amount_m:
+                bot.send_message(m.chat.id, f'На рахунку вашого підприємства недостатньо грошей для зняття. Спробуйте знову.\nЯкщо ви не хочете знімати кошти, введіть <code>СТОП</code>.',
+                                 parse_mode='HTML')
+                bot.register_next_step_handler(m, withdraw)
+                return
+
+            if amount_m < 1:
+                bot.send_message(m.chat.id, f'Вкажіть додатню кількість грошей для зняття. Спробуйте знову.\nЯкщо ви не хочете знімати кошти, введіть <code>СТОП</code>.',
+                                 parse_mode='HTML')
+                bot.register_next_step_handler(m, withdraw)
+                return
+
+            business[4] = business[4] - amount_m
+            acc_t[9] = acc_t[9] + amount_m
+
+            namep = f'<a href="tg://user?id={acc_t[1]}">{acc_t[2]} {acc_t[3]}</a>'
+            money_t = acc_t[9]
+
+            msg = f'Державний Банк\n'
+            msg += f'<b>Ячмінія</b>\n\n'
+            msg += f'Переказ коштів\n'
+            msg += f'Відправник: <a href="https://t.me/businesses_yachminiya/{business[7]}">{business[2]}</a> ({business[4]})\n'
+            msg += f'Отримувач: {namep} ({money_t})\n'
+            msg += f'Сума переказу: {amount_m} {glas(amount_m)}\n'
+            bot.send_message(m.chat.id, msg, parse_mode='HTML', disable_web_page_preview=True)
+            bot.send_message(-1001282951480, f'Переказ коштів\nСума переказу: {amount_m} {glas(amount_m)}')
+
+            business_f(business, m, False)
+            insert_business_a(business)
+            insert_passport_a(acc_t)
+            update_channel_business(business[1])
+            update_channel_rid(acc_t[13])
+
+        bot.edit_message_text(text=f'{business[2]}\nВведіть суму коштів, яку ви хочете зняти з рахунку підприємства\nЯкщо ви не хочете знімати кошти, введіть <code>СТОП</code>\nАктиви: {business[4]} {glas(business[4])}\nСтатки: {acc_t[11]} {glas(acc_t[11])}', message_id=call.message.message_id, chat_id=call.message.chat.id, parse_mode='HTML')
+        bot.register_next_step_handler(call.message, withdraw)
+        return
+
+    if call.data == 'count':
+        business = get_seans_business(u.id, m)
+        if business is None:
+            return
+        acc_g = get_passport(u.id)
+
+        def count(m):
+            nonlocal business, acc_g
+            if m.text == 'СТОП':
+                bot.send_message(m.chat.id, 'Ви відмінили процедуру нарахування коштів.')
+                business_f(business, m, False)
+                return
+
+            try:
+                amount_m = int(m.text)
+            except:
+                bot.send_message(m.chat.id,
+                                 'Неправильний формат вхідних даних. Спробуйте знову.\nЯкщо ви не хочете нараховувати кошти, введіть <code>СТОП</code>.',
+                                 parse_mode='HTML')
+                bot.register_next_step_handler(m, count)
+                return
+
+            if acc_g[9] < amount_m:
+                bot.send_message(m.chat.id,
+                                 f'На вашому рахунку недостатньо грошей для нарахування. Спробуйте знову.\nЯкщо ви не хочете нараховувати кошти, введіть <code>СТОП</code>.',
+                                 parse_mode='HTML')
+                bot.register_next_step_handler(m, count)
+                return
+
+            if amount_m < 1:
+                bot.send_message(m.chat.id,
+                                 f'Вкажіть додатню кількість грошей для нараховувати. Спробуйте знову.\nЯкщо ви не хочете нараховувати кошти, введіть <code>СТОП</code>.',
+                                 parse_mode='HTML')
+                bot.register_next_step_handler(m, count)
+                return
+
+            business[4] = business[4] + amount_m
+            acc_g[9] = acc_g[9] - amount_m
+
+            namep = f'<a href="tg://user?id={acc_g[1]}">{acc_g[2]} {acc_g[3]}</a>'
+            money_t = acc_g[9]
+
+            msg = f'Державний Банк\n'
+            msg += f'<b>Ячмінія</b>\n\n'
+            msg += f'Переказ коштів\n'
+            msg += f'Відправник: {namep} ({money_t})\n'
+            msg += f'Отримувач: <a href="https://t.me/businesses_yachminiya/{business[7]}">{business[2]}</a> ({business[4]})\n'
+            msg += f'Сума переказу: {amount_m} {glas(amount_m)}\n'
+            bot.send_message(m.chat.id, msg, parse_mode='HTML', disable_web_page_preview=True)
+            bot.send_message(-1001282951480, f'Переказ коштів\nСума переказу: {amount_m} {glas(amount_m)}')
+
+            business_f(business, m, False)
+            insert_business_a(business)
+            insert_passport_a(acc_g)
+            update_channel_business(business[1])
+            update_channel_rid(acc_g[13])
+
+        bot.edit_message_text(
+            text=f'{business[2]}\nВведіть суму коштів, яку ви хочете зняти з рахунку підприємства\nЯкщо ви не хочете знімати кошти, введіть <code>СТОП</code>\nАктиви: {business[4]} {glas(business[4])}\nСтатки: {acc_g[9]} {glas(acc_g[9])}',
+            message_id=call.message.message_id, chat_id=call.message.chat.id, parse_mode='HTML')
+        bot.register_next_step_handler(call.message, count)
+        return
 
 
 @bot.message_handler(func=lambda m: m.chat.id == -1001452719524, content_types=['new_chat_members'])
@@ -2215,7 +2355,10 @@ def commands(m):
             insert_passport_a(acc_t)
         else:
             insert_business_a(acc_t)
-        return
+            acc_t = get_passport(acc_t[3])
+
+        update_channel_rid(acc_g[13])
+        update_channel_rid(acc_t[13])
 
     if m.text.split()[0] == '!олігархи':
         if len(m.text.split()) > 1:

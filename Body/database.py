@@ -31,6 +31,55 @@ db.insert(table_meta)
 ########################################################################################################################
 
 
+def get_values_g(range_in):
+    '''Функція для отримання даних з таблиці.
+    Вхідними даними є діапазон вирізання, вихідними — список у списку'''
+    global done_operation
+    while True:
+        if done_operation:
+            done_operation = False
+            values = service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=range_in,
+                majorDimension='ROWS'
+            ).execute()['values']
+            done_operation = True
+            break
+    for i in range(len(values)):
+        for j in range(len(values[i])):
+            try:
+                values[i][j] = int(values[i][j])
+            except:
+                pass
+    return values
+
+
+def get_values_v(range_in):
+    '''Функція для отримання даних з таблиці.
+    Вхідними даними є діапазон вирізання, вихідними — список у списку'''
+    global done_operation
+    while True:
+        if done_operation:
+            done_operation = False
+            values = service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=range_in,
+                majorDimension='COLUMNS'
+            ).execute()['values']
+            done_operation = True
+            break
+    for i in range(len(values)):
+        for j in range(len(values[i])):
+            try:
+                values[i][j] = int(values[i][j])
+            except:
+                pass
+    return values
+
+
+########################################################################################################################
+
+
 def update_all_users():
     users = get_values_g('users!A7:M')
     db.insert_many(f'''
@@ -170,52 +219,6 @@ def insert_values_g(range_in, values_in):
             ).execute()
             done_operation = True
             break
-    return values
-
-
-def get_values_g(range_in):
-    '''Функція для отримання даних з таблиці.
-    Вхідними даними є діапазон вирізання, вихідними — список у списку'''
-    global done_operation
-    while True:
-        if done_operation:
-            done_operation = False
-            values = service.spreadsheets().values().get(
-                spreadsheetId=spreadsheet_id,
-                range=range_in,
-                majorDimension='ROWS'
-            ).execute()['values']
-            done_operation = True
-            break
-    for i in range(len(values)):
-        for j in range(len(values[i])):
-            try:
-                values[i][j] = int(values[i][j])
-            except:
-                pass
-    return values
-
-
-def get_values_v(range_in):
-    '''Функція для отримання даних з таблиці.
-    Вхідними даними є діапазон вирізання, вихідними — список у списку'''
-    global done_operation
-    while True:
-        if done_operation:
-            done_operation = False
-            values = service.spreadsheets().values().get(
-                spreadsheetId=spreadsheet_id,
-                range=range_in,
-                majorDimension='COLUMNS'
-            ).execute()['values']
-            done_operation = True
-            break
-    for i in range(len(values)):
-        for j in range(len(values[i])):
-            try:
-                values[i][j] = int(values[i][j])
-            except:
-                pass
     return values
 
 
