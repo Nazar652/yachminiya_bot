@@ -1909,6 +1909,7 @@ def callback_inline(call):
         return
 
 
+
 @bot.message_handler(func=lambda m: m.chat.id == -1001452719524, content_types=['new_chat_members'])
 def new_chat_member_gr(m):
     global welcome_m, pass_form_call
