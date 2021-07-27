@@ -33,7 +33,16 @@ bill integer,
 rights text,
 rid text,
 rid_welc integer,
-work text
+work text,
+acc_name text,
+acc_surname text,
+ident_code text,
+reputation integer,
+rep_cooldown integer,
+msg_am integer,
+word_am integer,
+week_msg_am text,
+week_word_am text
 )
 '''
 
@@ -43,7 +52,15 @@ num INTEGER NOT NULL PRIMARY KEY UNIQUE,
 name text,
 id integer,
 welcome text,
-link text
+link text,
+open_img text,
+type text,
+owner integer,
+is_open integer,
+rep_up text,
+rep_down text,
+trigers text,
+trig_text text
 )
 '''
 
@@ -105,5 +122,48 @@ CREATE TABLE IF NOT EXISTS meta (
 weekday text,
 petition_last integer,
 full_pass_amount integer
+)
+'''
+
+table_institutions = '''
+CREATE TABLE IF NOT EXISTS institutions (
+num integer,
+name text,
+genitive_name text,
+assets integer,
+last_decree integer,
+decree_img_link text,
+owner integer,
+report_date text
+)
+'''
+
+table_zhandarmeria = '''
+CREATE TABLE IF NOT EXISTS zhandarmeria (
+num integer,
+id integer,
+name text,
+amount_of_st integer,
+amount_of_st_period integer
+)
+'''
+
+table_graphstvo = '''
+CREATE TABLE IF NOT EXISTS graphstvo (
+num integer,
+id integer,
+name text,
+amount_of_doings integer,
+amount_of_doings_period integer
+)
+'''
+
+table_bank = '''
+CREATE TABLE IF NOT EXISTS bank (
+num integer,
+id integer,
+name text,
+amount_of_zvits integer,
+amount_of_zvits_period integer
 )
 '''

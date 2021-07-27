@@ -1,17 +1,20 @@
 from config import *
 from datetime import datetime
 import sql_obj
-import os
 from tables import *
+from threading import Timer
 
 
 done_operation = True
-dbname = "yachdatabase.sqlite"
+global_insert_queue = 0
+dbname = ":memory:"
+"""
 try:
     path = os.path.join(os.path.abspath(os.path.dirname(__file__)), dbname)
     os.remove(dbname)
 except:
     pass
+"""
 db = sql_obj.DB(dbname)
 
 
@@ -26,6 +29,11 @@ db.insert(table_sans)
 db.insert(table_businesses)
 db.insert(table_rids)
 db.insert(table_meta)
+db.insert(table_institutions)
+db.insert(table_zhandarmeria)
+db.insert(table_graphstvo)
+db.insert(table_bank)
+
 
 
 ########################################################################################################################
@@ -89,19 +97,19 @@ def update_all_users():
 
 
 def update_all_passports():
-    passports = get_values_g('passports!A7:P')
+    passports = get_values_g('passports!A7:Y')
     db.insert_many(f'''
         insert into passports 
         values 
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), passports)))
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), passports)))
 
 
 def update_all_chats():
-    chats = get_values_g('chats!A7:E')
+    chats = get_values_g('chats!A7:M')
     db.insert_many(f'''
         insert into chats 
         values 
-        (?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), chats)))
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), chats)))
 
 
 def update_all_channels():
@@ -152,6 +160,38 @@ def update_all_meta():
             (?, ?, ?)''', tuple(map(lambda x: tuple(x), meta)))
 
 
+def update_all_institutions():
+    institutions = get_values_g('institutions!A7:H')
+    db.insert_many(f'''
+            insert into institutions 
+            values 
+            (?, ?, ?, ?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), institutions)))
+
+
+def update_all_zhandarmeria():
+    zhandarmeria = get_values_g('zhandarmeria!A7:E')
+    db.insert_many(f'''
+            insert into zhandarmeria 
+            values 
+            (?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), zhandarmeria)))
+
+
+def update_all_graphstvo():
+    graphstvo = get_values_g('graphstvo!A7:E')
+    db.insert_many(f'''
+            insert into graphstvo 
+            values 
+            (?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), graphstvo)))
+
+
+def update_all_bank():
+    bank = get_values_g('bank!A7:E')
+    db.insert_many(f'''
+            insert into bank 
+            values 
+            (?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), bank)))
+
+
 ########################################################################################################################
 
 
@@ -164,6 +204,10 @@ update_all_sans()
 update_all_businesses()
 update_all_rids()
 update_all_meta()
+update_all_institutions()
+update_all_zhandarmeria()
+update_all_graphstvo()
+update_all_bank()
 
 
 ########################################################################################################################
@@ -176,50 +220,71 @@ def name(user):
     return user.first_name
 
 
+def insert_values(range_in, values_in, horizontal):
+    """
+    Функція для внесення даних у таблицю.
+    Вхідними даними є діапазон внесення та дані для внесення. Вихідних даних нема
+    """
+    global done_operation, global_insert_queue
+    if horizontal:
+        dim = 'ROWS'
+    else:
+        dim = 'COLUMNS'
+    while True:
+        if done_operation:
+            done_operation = False
+            values = service.spreadsheets().values().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={
+                    "valueInputOption": "USER_ENTERED",
+                    "data": [
+                        {"range": range_in,
+                         "majorDimension": dim,
+                         "values": values_in}
+                    ]
+                }
+            ).execute()
+            done_operation = True
+            break
+    if not global_insert_queue:
+        global_insert_queue -= 1
+    # return values
+
+
 def insert_values_v(range_in, values_in):
-    """Функція для внесення даних у таблицю.
-    Вхідними даними є діапазон внесення та дані для внесення. Вихідних даних нема"""
-    global done_operation
-    while True:
-        if done_operation:
-            done_operation = False
-            values = service.spreadsheets().values().batchUpdate(
-                spreadsheetId=spreadsheet_id,
-                body={
-                    "valueInputOption": "USER_ENTERED",
-                    "data": [
-                        {"range": range_in,
-                         "majorDimension": "COLUMNS",
-                         "values": values_in}
-                    ]
-                }
-            ).execute()
-            done_operation = True
-            break
-    return values
+    global global_insert_queue
+    global_insert_queue += 1
+    if global_insert_queue < 7:
+        q_in = 0
+    else:
+        q_in = global_insert_queue - 6
+    Timer(q_in, insert_values, args=(range_in, values_in, False)).start()
 
 
-def insert_values_g(range_in, values_in):
-    """Функція для внесення даних у таблицю.
-    Вхідними даними є діапазон внесення та дані для внесення. Вихідних даних нема"""
-    global done_operation
-    while True:
-        if done_operation:
-            done_operation = False
-            values = service.spreadsheets().values().batchUpdate(
-                spreadsheetId=spreadsheet_id,
-                body={
-                    "valueInputOption": "USER_ENTERED",
-                    "data": [
-                        {"range": range_in,
-                         "majorDimension": "ROWS",
-                         "values": values_in}
-                    ]
-                }
-            ).execute()
-            done_operation = True
-            break
-    return values
+def insert_values_h(range_in, values_in):
+    global global_insert_queue
+    global_insert_queue += 1
+    if global_insert_queue < 7:
+        q_in = 0
+    else:
+        q_in = global_insert_queue - 6
+    Timer(q_in, insert_values, args=(range_in, values_in, True)).start()
+
+
+def test_new_timer(bot, m):
+    global global_insert_queue
+    bot.send_message(m.chat.id, 'хуй')
+    global_insert_queue -= 1
+
+
+def test_new_timer_pre(bot, m):
+    global global_insert_queue
+    global_insert_queue += 1
+    if global_insert_queue < 7:
+        q_in = 0
+    else:
+        q_in = global_insert_queue - 6
+    Timer(q_in, test_new_timer, args=(bot, m)).start()
 
 
 def clear_range(range_in):
@@ -238,7 +303,7 @@ def clear_range(range_in):
     return
 
 
-def new_passport(u, namep, surname, sex):
+def new_passport(u, namep, surname, sex, acc_name, acc_surname):
     amount = get_amount_of_passports()
     date = str(datetime.now())[:-7]
     if u.username is None:
@@ -247,14 +312,14 @@ def new_passport(u, namep, surname, sex):
         u_username = u.username
     passport = [amount + 1, f'{u.id}', namep, surname, name(u),
                 u_username, sex, date, 'Без сану', 0, 'Початковий', 0,
-                '0 0 0 0 0', 'Самітник', 0, '0 0']
+                '0 0 0 0 0', 'Самітник', 0, '0 0', acc_name, acc_surname]
     db.insert('''
     INSERT INTO passports
-    (num, id, name, surname, nickname, tag, sex, date_create, san, balance, status, bill, rights, rid, rid_welc, work)
+    (num, id, name, surname, nickname, tag, sex, date_create, san, balance, status, bill, rights, rid, rid_welc, work, acc_name, acc_surname, ident_code, reputation, rep_cooldown, msg_am, word_am, week_mag_am, week_word_am)
     VALUES 
-    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', tuple(passport))
-    insert_values_g(f"passports!A{7 + amount}:P{7 + amount}", [passport])
+    insert_values_h(f"passports!A{7 + amount}:Y{7 + amount}", [passport])
 
 
 def new_user(u):
@@ -263,14 +328,14 @@ def new_user(u):
         u_username = 'None'
     else:
         u_username = u.username
-    user = [amount+1, f'{u.id}', f'{name(u)}', 0, 0, u_username, '0 0 0 0 0 0 0 0 0 0', 0, 0, '0 0 1 2', '0 0 1 2 3 4 5 6 8', '0 0 0 0 0 0 0', '0 0 0 0 0 0 0']
+    user = [amount+1, u.id, name(u), 0, 0, u_username, '0 0 0 0 0 0 0 0 0 0', 0, 0, '0 0 1 2', '0 0 1 2 3 4 5 6 8', '0 0 0 0 0 0 0', '0 0 0 0 0 0 0']
     db.insert('''
     INSERT INTO users
     (num, id, name, rep, repcool, tag, rights, mess_amount, word_amount, chats, channels, mess_week, words_week)
     VALUES 
     (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', tuple(user))
-    insert_values_g(f"users!A{7 + amount}:M{7 + amount}", [user])
+    insert_values_h(f"users!A{7 + amount}:M{7 + amount}", [user])
 
 
 def new_rid(u, namep, n):
@@ -282,7 +347,7 @@ def new_rid(u, namep, n):
     VALUES 
     (?, ?, ?, ?, ?, ?)
     ''', tuple(rid))
-    insert_values_g(f'rids!A{7 + amount}:F', rid)
+    insert_values_h(f'rids!A{7 + amount}:F', rid)
 
 
 def new_chat(chat):
@@ -294,7 +359,7 @@ def new_chat(chat):
         VALUES 
         (?, ?, ?, ?, ?)
         ''', tuple(chat_in))
-    insert_values_g(f'AX{amount + 7}:BB{amount + 7}', [chat_in])
+    insert_values_h(f'chats!A{amount + 7}:F{amount + 7}', [chat_in])
 
 
 def new_business(u, namep, n, tag, about):
@@ -306,7 +371,43 @@ def new_business(u, namep, n, tag, about):
     VALUES 
     (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', tuple(business))
-    insert_values_g(f'rids!A{7 + amount}:F', business)
+    insert_values_h(f'rids!A{7 + amount}:J', business)
+
+
+def new_zhan(u):
+    amount = get_amount_of_zhans()
+    zhan = [amount + 1, u.id, 'Новобранець', 0, 0]
+    db.insert('''
+    INSERT INTO zhandarmeria
+    (num, id, name, amount_of_st, amount_of_st_period)
+    VALUES 
+    (?, ?, ?, ?, ?)
+    ''', tuple(zhan))
+    insert_values_h(f"zhandarmeria!A{7 + amount}:E", [zhan])
+
+
+def new_erl(u):
+    amount = get_amount_of_erls()
+    erl = [amount + 1, u.id, 'Віконт', 0, 0]
+    db.insert('''
+    INSERT INTO graphstvo
+    (num, id, name, amount_of_doings, amount_of_doings_period)
+    VALUES 
+    (?, ?, ?, ?, ?)
+    ''', tuple(erl))
+    insert_values_h(f"graphstvo!A{7 + amount}:E", [erl])
+
+
+def new_karb(u):
+    amount = get_amount_of_karbs()
+    karb = [amount + 1, u.id, 'Карб', 0, 0]
+    db.insert('''
+    INSERT INTO bank
+    (num, id, name, amount_of_zvits, amount_of_zvits_period)
+    VALUES 
+    (?, ?, ?, ?, ?)
+    ''', tuple(erl))
+    insert_values_h(f"bank!A{7 + amount}:E", [karb])
 
 
 def insert_user_l(user):
@@ -332,7 +433,7 @@ words_week = ?
 
 
 def insert_user_g(user):
-    insert_values_g(f'users!A{6+int(user[0])}:M{6+int(user[0])}', [user])
+    insert_values_h(f'users!A{6 + int(user[0])}:M{6 + int(user[0])}', [user])
 
 
 def insert_user_a(user):
@@ -358,14 +459,23 @@ bill = ?,
 rights = ?,
 rid = ?,
 rid_welc = ?,
-work = ?
+work = ?,
+acc_name = ?,
+acc_surname = ?,
+ident_code = ?,
+reputation = ?,
+rep_cooldown = ?,
+msg_am = ?,
+word_am = ?,
+week_msg_am = ?,
+week_word_am = ?
     WHERE 
     id = ?
     ''', passport + [passport[1]])
 
 
 def insert_passport_g(passport):
-    insert_values_g(f'passports!A{6+int(passport[0])}:P{6+int(passport[0])}', [passport])
+    insert_values_h(f'passports!A{6 + int(passport[0])}:Y{6 + int(passport[0])}', [passport])
 
 
 def insert_passport_a(passport):
@@ -387,12 +497,12 @@ ch_num = ?,
 financing = ?,
 rid = ?
     WHERE 
-    tag = ?
-    ''', business + [business[1]])
+    num = ?
+    ''', business + [business[0]])
 
 
 def insert_business_g(business):
-    insert_values_g(f'businesses!A{6+int(business[0])}:J{6+int(business[0])}', [business])
+    insert_values_h(f'businesses!A{6 + int(business[0])}:J{6 + int(business[0])}', [business])
 
 
 def insert_business_a(business):
@@ -409,19 +519,106 @@ name = ?,
 owner = ?,
 members = ?,
 assets = ?,
-ch_num = ?,
+ch_num = ?
     WHERE 
-    name = ?
-    ''', rid + [rid[1]])
+    num = ?
+    ''', rid + [rid[0]])
 
 
 def insert_rid_g(rid):
-    insert_values_g(f'rids!A{6+int(rid[0])}:F{6+int(rid[0])}', [rid])
+    insert_values_h(f'rids!A{6 + int(rid[0])}:F{6 + int(rid[0])}', [rid])
 
 
 def insert_rid_a(rid):
     insert_rid_l(rid)
     insert_rid_g(rid)
+
+
+def insert_institution_l(institution):
+    db.insert('''
+    UPDATE institutions
+    SET num = ?,
+name = ?,
+genitive_name = ?,
+assets = ?,
+last_decree = ?,
+decree_img_link = ?,
+owner = ?,
+report_date = ?
+    WHERE name = ?
+    ''', institution + [institution[1]])
+
+
+def insert_institution_g(institution):
+    insert_values_h(f'institutions!A{6 + int(institution[0])}:H{6 + int(institution[0])}', [institution])
+
+
+def insert_institution_a(institution):
+    insert_institution_l(institution)
+    insert_institution_g(institution)
+
+
+def insert_zhan_l(zhan):
+    db.insert('''
+    UPDATE zhandarmeria
+    SET num = ?,
+id = ?,
+name = ?,
+amount_of_st = ?,
+amount_of_st_period = ?
+    WHERE id = ?
+    ''', zhan + [zhan[1]])
+
+
+def insert_zhan_g(zhan):
+    insert_values_h(f'zhandarmeria!A{6 + int(zhan[0])}:E{6 + int(zhan[0])}', [zhan])
+
+
+def insert_zhan_a(zhan):
+    insert_zhan_l(zhan)
+    insert_zhan_g(zhan)
+
+
+def insert_erl_l(erl):
+    db.insert('''
+    UPDATE graphstvo
+    SET num = ?,
+id = ?,
+name = ?,
+amount_of_doings = ?,
+amount_of_doings_period = ?
+    WHERE id = ?
+    ''', erl + [erl[1]])
+
+
+def insert_erl_g(erl):
+    insert_values_h(f'graphstvo!A{6 + int(erl[0])}:E{6 + int(erl[0])}', [erl])
+
+
+def insert_erl_a(erl):
+    insert_erl_l(erl)
+    insert_erl_g(erl)
+
+
+def insert_karb_l(karb):
+    db.insert('''
+    UPDATE bank
+    SET num = ?,
+id = ?,
+name = ?,
+amount_of_zvits = ?,
+amount_of_zvits_period = ?
+    WHERE id = ?
+    ''', karb + [karb[1]])
+
+
+def insert_karb_g(karb):
+    insert_values_h(f'karb!A{6 + int(karb[0])}:E{6 + int(karb[0])}', [karb])
+
+
+def insert_karb_a(karb):
+    insert_karb_l(karb)
+    insert_karb_g(karb)
 
 
 def get_all_users():
@@ -495,6 +692,34 @@ def get_all_meta():
     return list(meta)
 
 
+def get_all_institutions():
+    institutions = map(lambda x: list(x), db.get('''
+    select *
+    from institutions'''))
+    return list(institutions)
+
+
+def get_all_zhandarmeria():
+    zhandarmeria = map(lambda x: list(x), db.get('''
+        select *
+        from zhandarmeria'''))
+    return list(zhandarmeria)
+
+
+def get_all_graphstvo():
+    graphstvo = map(lambda x: list(x), db.get('''
+        select *
+        from graphstvo'''))
+    return list(graphstvo)
+
+
+def get_all_bank():
+    bank = map(lambda x: list(x), db.get('''
+        select *
+        from bank'''))
+    return list(bank)
+
+
 def get_user(ident):
     try:
         user = list(db.get('''
@@ -507,25 +732,78 @@ def get_user(ident):
 
 
 def get_passport(ident):
-    try:
-        passport = list(db.get('''
-        SELECT * 
-        FROM passports
-        WHERE id = ?''', (ident, ))[0])
-    except:
-        return None
+    passport = db.get('''
+    SELECT * 
+    FROM passports
+    WHERE id = ?''', (ident, ))
+    if passport:
+        passport = list(passport[0])
+    else:
+        passport = db.get('''
+            SELECT * 
+            FROM passports
+            WHERE ident_code = ?''', (ident,))
+        if passport:
+            passport = list(passport[0])
+        else:
+            return None
     return passport
 
 
 def get_chat(ident):
+    chat = db.get('''
+    SELECT * 
+    FROM chats
+    WHERE id = ?''', (ident, ))
+    if chat:
+        chat = list([0])
+    else:
+        return None
+    return chat
+
+
+def get_institution(name):
     try:
-        chat = list(db.get('''
+        institution = list(db.get('''
         SELECT * 
-        FROM chats
+        FROM institutions
+        WHERE name = ?''', (name, ))[0])
+    except:
+        return None
+    return institution
+
+
+def get_zhan(ident):
+    try:
+        zhan = list(db.get('''
+        SELECT * 
+        FROM zhandarmeria
         WHERE id = ?''', (ident, ))[0])
     except:
         return None
-    return chat
+    return zhan
+
+
+def get_erl(ident):
+    try:
+        erl = list(db.get('''
+        SELECT * 
+        FROM graphstvo
+        WHERE id = ?''', (ident, ))[0])
+    except:
+        return None
+    return erl
+
+
+def get_karb(ident):
+    try:
+        karb = list(db.get('''
+        SELECT * 
+        FROM bank
+        WHERE id = ?''', (ident, ))[0])
+    except:
+        return None
+    return karb
 
 
 def get_sans(values):
@@ -534,7 +812,6 @@ def get_sans(values):
 select *
 from sans
 where name in ({ins})'''
-    print(sql)
     sans = map(lambda x: list(x), db.get(sql, values))
     return list(sans)
 
@@ -598,7 +875,7 @@ def insert_petition_last(amount):
             values 
             (?)
             ''', (amount,))
-    insert_values_g('meta!B7:B7', [[amount]])
+    insert_values_h('meta!B7:B7', [[amount]])
 
 
 def get_amount_of_users():
@@ -619,6 +896,24 @@ def get_amount_of_businesses():
     return amount
 
 
+def get_amount_of_zhans():
+    zhans = get_all_zhandarmeria()
+    amount = len(zhans)
+    return amount
+
+
+def get_amount_of_erls():
+    erls = get_all_graphstvo()
+    amount = len(erls)
+    return amount
+
+
+def get_amount_of_karbs():
+    karbs = get_all_bank()
+    amount = len(karbs)
+    return amount
+
+
 def del_table_passports():
     db.insert('''drop table passports''')
 
@@ -627,16 +922,96 @@ def insert_all_passports_l(passports):
     db.insert_many(f'''
             insert into passports 
             values 
-            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), passports)))
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), passports)))
 
 
 def insert_all_passports_g(passports):
-    insert_values_g('passports!A7:P', passports)
+    insert_values_h('passports!A7:Y', passports)
 
 
 def del_passport_g(all_passports, amount):
-    insert_values_g('passports!A7:P', all_passports)
-    clear_range(f'passports!A{6+amount}:P{6+amount}')
+    insert_values_h('passports!A7:Y', all_passports)
+    clear_range(f'passports!A{6+amount}:Y{6+amount}')
+
+
+def del_table_businesses():
+    db.insert('''drop table businesses''')
+
+
+def insert_all_businesses_l(businesses):
+    db.insert_many(f'''
+            insert into businesses 
+            values 
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), businesses)))
+
+
+def insert_all_businesses_g(businesses):
+    insert_values_h('businesses!A7:J', businesses)
+
+
+def del_business_g(all_businesses, amount):
+    insert_values_h('businesses!A7:J', all_businesses)
+    clear_range(f'businesses!A{6+amount}:J{6+amount}')
+
+
+def del_table_zhandarmeria():
+    db.insert('''drop table zhandarmeria''')
+
+
+def insert_all_zhandarmeria_l(zhandarmeria):
+    db.insert_many(f'''
+            insert into zhandarmeria 
+            values 
+            (?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), zhandarmeria)))
+
+
+def insert_all_zhandarmeria_g(zhandarmeria):
+    insert_values_h('zhandarmeria!A7:E', zhandarmeria)
+
+
+def del_zhan_g(all_zhans, amount):
+    insert_values_h('zhandarmeria!A7:E', all_zhans)
+    clear_range(f'zhandarmeria!A{7+amount}:E{7+amount}')
+
+
+def del_table_graphstvo():
+    db.insert('''drop table graphstvo''')
+
+
+def insert_all_graphstvo_l(graphstvo):
+    db.insert_many(f'''
+            insert into graphstvo 
+            values 
+            (?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), graphstvo)))
+
+
+def insert_all_graphstvo_g(graphstvo):
+    insert_values_h('graphstvo!A7:E', graphstvo)
+
+
+def del_erl_g(all_erls, amount):
+    insert_values_h('graphstvo!A7:E', all_erls)
+    clear_range(f'graphstvo!A{7+amount}:E{7+amount}')
+
+
+def del_table_bank():
+    db.insert('''drop table bank''')
+
+
+def insert_all_bank_l(bank):
+    db.insert_many(f'''
+            insert into bank 
+            values 
+            (?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), bank)))
+
+
+def insert_all_bank_g(bank):
+    insert_values_h('bank!A7:E', bank)
+
+
+def del_karb_g(all_karbs, amount):
+    insert_values_h('bank!A7:E', all_karbs)
+    clear_range(f'bank!A{7+amount}:E{7+amount}')
 
 
 """def get():

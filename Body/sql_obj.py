@@ -2,8 +2,8 @@ import sqlite3
 
 
 class DB:
-    def __init__(self, dbname):
-        self._conn = sqlite3.connect(dbname, check_same_thread=False)
+    def __init__(self, dbn):
+        self._conn = sqlite3.connect(dbn, check_same_thread=False)
         self._cur = self._conn.cursor()
 
     def insert(self, sql, values=()):
@@ -22,7 +22,7 @@ class DB:
         self._conn.commit()
 
     '''def get_many(self, sql, values_list=(())):
-        try:
-            return self._cur.executemany(sql, values_list).fetchall()
-        except:
-            return None'''
+            try:
+                return self._cur.executemany(sql, values_list).fetchall()
+            except:
+                return None'''
