@@ -33,7 +33,7 @@ db.insert(table_institutions)
 db.insert(table_zhandarmeria)
 db.insert(table_graphstvo)
 db.insert(table_bank)
-
+db.insert(table_posts)
 
 
 ########################################################################################################################
@@ -105,19 +105,19 @@ def update_all_passports():
 
 
 def update_all_chats():
-    chats = get_values_g('chats!A7:M')
+    chats = get_values_g('chats!A7:O')
     db.insert_many(f'''
         insert into chats 
         values 
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), chats)))
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), chats)))
 
 
 def update_all_channels():
-    channels = get_values_g('channels!A7:D')
+    channels = get_values_g('channels!A7:I')
     db.insert_many(f'''
         insert into channels
         values 
-        (?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), channels)))
+        (?, ?, ?, ?, ?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), channels)))
 
 
 def update_all_admin():
@@ -161,11 +161,11 @@ def update_all_meta():
 
 
 def update_all_institutions():
-    institutions = get_values_g('institutions!A7:H')
+    institutions = get_values_g('institutions!A7:I')
     db.insert_many(f'''
             insert into institutions 
             values 
-            (?, ?, ?, ?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), institutions)))
+            (?, ?, ?, ?, ?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), institutions)))
 
 
 def update_all_zhandarmeria():
@@ -192,6 +192,14 @@ def update_all_bank():
             (?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), bank)))
 
 
+def update_all_posts():
+    posts = get_values_g('posts!A7:E')
+    db.insert_many(f'''
+            insert into posts
+            values 
+            (?, ?, ?, ?, ?)''', tuple(map(lambda x: tuple(x), posts)))
+
+
 ########################################################################################################################
 
 
@@ -208,9 +216,57 @@ update_all_institutions()
 update_all_zhandarmeria()
 update_all_graphstvo()
 update_all_bank()
+update_all_posts()
 
 
 ########################################################################################################################
+
+
+def update_all_db():
+    db.insert('''drop table users''')
+    db.insert('''drop table passports''')
+    db.insert('''drop table chats''')
+    db.insert('''drop table channels''')
+    db.insert('''drop table admin''')
+    db.insert('''drop table sans''')
+    db.insert('''drop table businesses''')
+    db.insert('''drop table rids''')
+    db.insert('''drop table meta''')
+    db.insert('''drop table institutions''')
+    db.insert('''drop table zhandarmeria''')
+    db.insert('''drop table graphstvo''')
+    db.insert('''drop table bank''')
+    db.insert('''drop table posts''')
+
+    db.insert(table_users)
+    db.insert(table_passports)
+    db.insert(table_chats)
+    db.insert(table_channels)
+    db.insert(table_admin)
+    db.insert(table_sans)
+    db.insert(table_businesses)
+    db.insert(table_rids)
+    db.insert(table_meta)
+    db.insert(table_institutions)
+    db.insert(table_zhandarmeria)
+    db.insert(table_graphstvo)
+    db.insert(table_bank)
+    db.insert(table_posts)
+
+    update_all_users()
+    update_all_passports()
+    update_all_chats()
+    update_all_channels()
+    update_all_admin()
+    update_all_sans()
+    update_all_businesses()
+    update_all_rids()
+    update_all_meta()
+    update_all_institutions()
+    update_all_zhandarmeria()
+    update_all_graphstvo()
+    update_all_bank()
+    update_all_posts()
 
 
 def name(user):
@@ -350,16 +406,30 @@ def new_rid(u, namep, n):
     insert_values_h(f'rids!A{7 + amount}:F', rid)
 
 
-def new_chat(chat):
+def new_chat(chat, type_ch, owner, admins):
     amount = len(get_all_chats())
-    chat_in = [amount + 1, chat.title, chat.id, 'None', 'NoneURL']
+    chat_in = [amount + 1, chat.id, chat.title, 'None', 'NoneURL', "None", type_ch, owner, 0, "None", "None", "None",
+               "None", ' '.join(admins), 0]
     db.insert('''
         INSERT INTO chats
-        (num, name, id, welcome, link)
+        (num, id, name, welcome, link, open_img, type_ch, owner, is_on, rep_up, rep_down, trigers, trig_text, admins, 
+        linked_channel)
         VALUES 
-        (?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', tuple(chat_in))
-    insert_values_h(f'chats!A{amount + 7}:F{amount + 7}', [chat_in])
+    insert_values_h(f'chats!A{amount + 7}:O{amount + 7}', [chat_in])
+
+
+def new_channel(channel, type_ch, owner, admins):
+    amount = len(get_all_channels())
+    channel_in = [amount + 1, channel.id, channel.title, 'None', type_ch, owner, 0, ' '.join(admins), 0]
+    db.insert('''
+        INSERT INTO channels
+        (num, id, name, link, type_ch, owner, is_on, admins, linked_chat)
+        VALUES 
+        (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', tuple(channel_in))
+    insert_values_h(f'channels!A{amount + 7}:I{amount + 7}', [channel_in])
 
 
 def new_business(u, namep, n, tag, about):
@@ -406,8 +476,20 @@ def new_karb(u):
     (num, id, name, amount_of_zvits, amount_of_zvits_period)
     VALUES 
     (?, ?, ?, ?, ?)
-    ''', tuple(erl))
+    ''', tuple(karb))
     insert_values_h(f"bank!A{7 + amount}:E", [karb])
+
+
+def new_post(ch_id, m_id, react, votes):
+    amount = get_amount_of_posts()
+    post = [amount+1, ch_id, m_id, react, votes]
+    db.insert('''
+    INSERT INTO posts
+    (num, ch_id, m_id, react, votes)
+    VALUES 
+    (?, ?, ?, ?, ?)
+    ''', tuple(post))
+    insert_values_h(f"posts!A{7 + amount}:E", [post])
 
 
 def insert_user_l(user):
@@ -483,6 +565,64 @@ def insert_passport_a(passport):
     insert_passport_g(passport)
 
 
+def insert_chat_l(chat):
+    db.insert('''
+    UPDATE chats
+    SET num = ?,
+id = ?,
+name = ?,
+welcome = ?,
+link = ?,
+open_img = ?,
+type_ch = ?,
+owner = ?,
+is_on = ?,
+rep_up = ?,
+rep_down = ?,
+trigers = ?,
+trig_text = ?,
+admins = ?,
+linked_channel = ?
+    WHERE 
+    id = ?
+    ''', chat + [chat[1]])
+
+
+def insert_chat_g(chat):
+    insert_values_h(f'chats!A{6 + chat[0]}:O{6 + chat[0]}', [chat])
+
+
+def insert_chat_a(chat):
+    insert_chat_l(chat)
+    insert_chat_g(chat)
+
+
+def insert_channel_l(channel):
+    db.insert('''
+    UPDATE channels
+    SET num = ?,
+id = ?,
+name = ?,
+link = ?,
+type_ch = ?,
+owner = ?,
+is_on = ?,
+admins = ?,
+linked_chat = ?
+    WHERE 
+    id = ?
+    ''', channel + [channel[1]])
+
+
+def insert_channel_g(channel):
+    insert_values_h(f'channels!A{6 + channel[0]}:I{6 + channel[0]}', [channel])
+
+
+def insert_channel_a(channel):
+    insert_channel_l(channel)
+    insert_channel_g(channel)
+
+
 def insert_business_l(business):
     db.insert('''
     UPDATE businesses
@@ -544,13 +684,14 @@ assets = ?,
 last_decree = ?,
 decree_img_link = ?,
 owner = ?,
-report_date = ?
+report_date = ?,
+ch_num = ?
     WHERE name = ?
     ''', institution + [institution[1]])
 
 
 def insert_institution_g(institution):
-    insert_values_h(f'institutions!A{6 + int(institution[0])}:H{6 + int(institution[0])}', [institution])
+    insert_values_h(f'institutions!A{6 + int(institution[0])}:I{6 + int(institution[0])}', [institution])
 
 
 def insert_institution_a(institution):
@@ -613,12 +754,33 @@ amount_of_zvits_period = ?
 
 
 def insert_karb_g(karb):
-    insert_values_h(f'karb!A{6 + int(karb[0])}:E{6 + int(karb[0])}', [karb])
+    insert_values_h(f'bank!A{6 + int(karb[0])}:E{6 + int(karb[0])}', [karb])
 
 
 def insert_karb_a(karb):
     insert_karb_l(karb)
     insert_karb_g(karb)
+
+
+def insert_post_l(post):
+    db.insert('''
+    UPDATE posts
+    SET num = ?,
+ch_id = ?,
+m_id = ?,
+react = ?,
+votes = ?
+    WHERE ch_id = ? and m_id = ?
+    ''', post + [post[1], post[2]])
+
+
+def insert_post_g(post):
+    insert_values_h(f'posts!A{6 + int(post[0])}:E{6 + int(post[0])}', [post])
+
+
+def insert_post_a(post):
+    insert_post_l(post)
+    insert_post_g(post)
 
 
 def get_all_users():
@@ -643,17 +805,25 @@ def get_all_passports():
     return list(passports)
 
 
-def get_all_chats():
-    chats = map(lambda x: list(x), db.get('''
+def get_all_chats(ident=0):
+    if ident:
+        text_in = f' where owner = {ident}'
+    else:
+        text_in = ''
+    chats = map(lambda x: list(x), db.get(f'''
     select *
-    from chats'''))
+    from chats{text_in}'''))
     return list(chats)
 
 
-def get_all_channels():
-    channels = map(lambda x: list(x), db.get('''
+def get_all_channels(ident=0):
+    if ident:
+        text_in = f' where owner = {ident}'
+    else:
+        text_in = ''
+    channels = map(lambda x: list(x), db.get(f'''
     select *
-    from channels'''))
+    from channels{text_in}'''))
     return list(channels)
 
 
@@ -720,6 +890,13 @@ def get_all_bank():
     return list(bank)
 
 
+def get_all_posts():
+    posts = map(lambda x: list(x), db.get('''
+        select *
+        from posts'''))
+    return list(posts)
+
+
 def get_user(ident):
     try:
         user = list(db.get('''
@@ -756,10 +933,22 @@ def get_chat(ident):
     FROM chats
     WHERE id = ?''', (ident, ))
     if chat:
-        chat = list([0])
+        chat = list(chat[0])
     else:
         return None
     return chat
+
+
+def get_channel(ident):
+    channel = db.get('''
+    SELECT * 
+    FROM channels
+    WHERE id = ?''', (ident, ))
+    if channel:
+        channel = list(channel[0])
+    else:
+        return None
+    return channel
 
 
 def get_institution(name):
@@ -858,6 +1047,17 @@ def get_rid(ident):
     return rid
 
 
+def get_post(c, m):
+    try:
+        post = list(db.get('''
+        SELECT * 
+        FROM posts
+        WHERE ch_id = ? and m_id = ?''', (c, m))[0])
+    except:
+        return None
+    return post
+
+
 def get_amount_of_passports():
     passports = get_all_passports()
     amount = len(passports)
@@ -876,6 +1076,16 @@ def insert_petition_last(amount):
             (?)
             ''', (amount,))
     insert_values_h('meta!B7:B7', [[amount]])
+
+
+def insert_day_meta(amount):
+    db.insert('''
+            insert into meta
+            (month_day)
+            values 
+            (?)
+            ''', (amount,))
+    insert_values_h('meta!A7:A7', [[amount]])
 
 
 def get_amount_of_users():
@@ -911,6 +1121,12 @@ def get_amount_of_erls():
 def get_amount_of_karbs():
     karbs = get_all_bank()
     amount = len(karbs)
+    return amount
+
+
+def get_amount_of_posts():
+    posts = get_all_posts()
+    amount = len(posts)
     return amount
 
 

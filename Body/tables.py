@@ -49,27 +49,34 @@ week_word_am text
 table_chats = '''
 CREATE TABLE IF NOT EXISTS chats (
 num INTEGER NOT NULL PRIMARY KEY UNIQUE,
-name text,
 id integer,
+name text,
 welcome text,
 link text,
 open_img text,
-type text,
+type_ch text,
 owner integer,
-is_open integer,
+is_on integer,
 rep_up text,
 rep_down text,
 trigers text,
-trig_text text
+trig_text text,
+admins text,
+linked_channel integer
 )
 '''
 
 table_channels = '''
 CREATE TABLE IF NOT EXISTS channels (
 num INTEGER NOT NULL PRIMARY KEY UNIQUE,
-name text,
 id integer,
-link text
+name text,
+link text,
+type_ch text,
+owner integer,
+is_on integer,
+admins text,
+linked_chat integer
 )
 '''
 
@@ -119,7 +126,7 @@ ch_num integer
 
 table_meta = '''
 CREATE TABLE IF NOT EXISTS meta (
-weekday text,
+month_day integer,
 petition_last integer,
 full_pass_amount integer
 )
@@ -134,7 +141,8 @@ assets integer,
 last_decree integer,
 decree_img_link text,
 owner integer,
-report_date text
+report_date text,
+ch_num integer 
 )
 '''
 
@@ -165,5 +173,15 @@ id integer,
 name text,
 amount_of_zvits integer,
 amount_of_zvits_period integer
+)
+'''
+
+table_posts = '''
+CREATE TABLE IF NOT EXISTS posts (
+num integer,
+ch_id integer,
+m_id integer,
+react text,
+votes text
 )
 '''

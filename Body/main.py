@@ -5,14 +5,15 @@ from telebot import types
 from traceback import print_exc
 from io import StringIO
 import random
-from pprint import pprint
 from database import *
 from tables import *
 from variables import *
 import re
+from operator import itemgetter
+# from pprint import pprint
 
-bot = telebot.TeleBot(Token, threaded=False)
-BOT_USER = bot.get_me().id
+bot = telebot.TeleBot(Token) # , threaded=False
+BOT_USER = 1875045403
 
 
 def f_queue(m):
@@ -126,6 +127,58 @@ def glas(am):
     return glas
 
 
+def aktyv_r():
+    '''актив'''
+    global aktyv, lakt
+    passports = get_all_passports()
+    if false_day:
+        day = false_day
+    else:
+        day = datetime.today().day
+    month = datetime.today().month
+    day_db = get_all_meta()[0][0]
+    min_day = 0
+    if day_db == day:
+        day_is = True
+    else:
+        day_is = False
+        insert_day_meta(day)
+        if day < day_db:
+            min_day = 31 - months[month_num[month - 2]][1]
+    for i in passports:
+        msgs = i[23].split()
+        words = i[24].split()
+        try:
+            if day_is:
+                msgs[day - 1] = str(int(msgs[day - 1]) + aktyv[i[1]][0])
+                i[23] = ' '.join(msgs)
+                words[day - 1] = str(int(words[day - 1]) + aktyv[i[1]][1])
+                i[24] = ' '.join(words)
+            else:
+                if min_day:
+                    for j in range(30, 30 - min_day, -1):
+                        msgs[j] = '0'
+                        words[j] = '0'
+                msgs[day - 1] = str(aktyv[i[1]][0])
+                i[23] = ' '.join(msgs)
+                words[day - 1] = str(aktyv[i[1]][1])
+                i[24] = ' '.join(words)
+        except Exception as e:
+            if not day_is:
+                if min_day:
+                    for j in range(30, 30 - min_day, -1):
+                        msgs[j] = '0'
+                        words[j] = '0'
+                msgs[day - 1] = '0'
+                i[23] = ' '.join(msgs)
+                words[day - 1] = '0'
+                i[24] = ' '.join(words)
+        insert_passport_l(i)
+    insert_all_passports_g(passports)
+    lakt = 0
+    aktyv = {}
+
+
 def commission(x, mnozh):
     x = int(x)
     if x <= 8:
@@ -153,11 +206,17 @@ def commission(x, mnozh):
     return round(x * n)
 
 
+def user_link(id, *text):
+    return f'<a href="tg://user?id={id}">{" ".join(text)}</a>'
+
+
 def prostir_f(m, lab=True):
     keyboard = types.InlineKeyboardMarkup()
     callback_button = types.InlineKeyboardButton(text=f"🗯 Чати Ячмінії", callback_data=f"chats")
     keyboard.add(callback_button)
     callback_button = types.InlineKeyboardButton(text=f"📺 Канали Ячмінії", callback_data=f"channels")
+    keyboard.add(callback_button)
+    callback_button = types.InlineKeyboardButton(text="Меню керування простором Ячмінії", callback_data="prostir_menu")
     keyboard.add(callback_button)
     callback_button = types.InlineKeyboardButton(text=f"⬅️ До головного меню", callback_data=f"menul")
     keyboard.add(callback_button)
@@ -224,6 +283,8 @@ def menus_f(m, lab=True):
     callback_button = types.InlineKeyboardButton(text="👥Меню роду", callback_data="rid")
     keyboard.add(callback_button)
     callback_button = types.InlineKeyboardButton(text="Меню держслужбовця", callback_data="state_menu")
+    keyboard.add(callback_button)
+    callback_button = types.InlineKeyboardButton(text="Меню простору Ячмінії", callback_data="prostir_menu")
     keyboard.add(callback_button)
     callback_button = types.InlineKeyboardButton(text=f"⬅️ До головного меню", callback_data=f"menul")
     keyboard.add(callback_button)
@@ -359,12 +420,63 @@ def state_menu_f(u, m, lab=True):
     return
 
 
-def menu_footer(keyboard, call_data, back='⬅️ Назад'):
-    callback_button = types.InlineKeyboardButton(text=back, callback_data=call_data)
-    keyboard.add(callback_button)
+def prostir_menu_f(u, m, lab=True):
+    passport = get_passport(u.id)
+    if passport is None:
+        keyboard = menu_footer(types.InlineKeyboardMarkup(), 'menus')
+        if lab:
+            bot.edit_message_text(chat_id=m.chat.id, message_id=m.message_id,
+                                  text=f'У вас нема паспорта Ячмінії', reply_markup=keyboard)
+        else:
+            bot.send_message(chat_id=m.chat.id,
+                             text=f'У вас нема паспорта Ячмінії', reply_markup=keyboard)
+        return
+    keyboard = types.InlineKeyboardMarkup()
+    button0 = types.InlineKeyboardButton(text='Особисті чати', callback_data='private_chats_0')
+    button1 = types.InlineKeyboardButton(text='Особисті канали', callback_data='private_channels_0')
+    button2 = types.InlineKeyboardButton(text='🗺 До простору Ячмінії',
+                                         callback_data='prostir')
+    button3 = types.InlineKeyboardButton(text='📱 До спеціалізованих меню',
+                                         callback_data='menus')
     callback_button = types.InlineKeyboardButton(text=f"⬅️ До головного меню", callback_data=f"menul")
-    keyboard.add(callback_button)
+    keyboard.keyboard = [[button0], [button1], [button2, button3], [callback_button]]
+    text = f'Меню керування особистими чатами та каналами.'
+    if lab:
+        bot.edit_message_text(text=text,
+                              message_id=m.message_id, chat_id=m.chat.id, reply_markup=keyboard,
+                              parse_mode="HTML", disable_web_page_preview=True)
+    else:
+        bot.send_message(text=text,
+                         chat_id=m.chat.id, reply_markup=keyboard,
+                         parse_mode="HTML", disable_web_page_preview=True)
+
+
+def simplify(text):
+    return re.sub(r'<(/|).*?>', '', text)
+
+
+def menu_footer(keyboard, call_data, back='⬅️ Назад'):
+    but0 = types.InlineKeyboardButton(text=back, callback_data=call_data)
+    but1 = types.InlineKeyboardButton(text=f"⬅️ До меню", callback_data=f"menul")
+    """keyboard.add(but0)
+    keyboard.add(but1)"""
+    keyboard.keyboard.append([but0, but1])
     return keyboard
+
+
+def register_next_step_handler(m, function, *args, **kwargs):
+    args = tuple([function] + list(args))
+    bot.register_next_step_handler(m, reg_next, *args, **kwargs)
+
+
+def reg_next(m, function, is_media=False):
+    if not is_media and not m.text:
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(types.InlineKeyboardButton(text=f"⬅️ До меню", callback_data=f"menul"))
+        bot.send_message(m.chat.id, 'Отримано медіа-повідомлення. Дана операція підтримує тільки текстові '
+                                    'повідомлення. Спробуйте ще раз.', reply_markup=keyboard)
+    else:
+        function(m)
 
 
 def get_str_passport(id):
@@ -373,18 +485,24 @@ def get_str_passport(id):
         try:
             user = get_user(id)
             if user is None:
-                u = get_chat(id)
+                u = bot.get_chat(id)
                 return f'{name(u)} не має громадянства Ячмінії.'
             else:
                 return f'{user[4]} не має громадянства Ячмінії.'
         except:
             return f'Вказаний неправильний ідентифікаційний код особи.'
-    passport_out = f'<b>Паспорт</b>\n'
-    passport_out += f'<i>Громадянина Ячмінії</i>\n\n'
-    passport_out += f'''<b>Ім'я:</b> <i><a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a></i>\n'''
-    passport_out += f"<b>Сан:</b> <i>{passport[8]}</i>\n"
+    if passport[10] == 'Громадянин':
+        stat = 'Громадянина'
+        san = f'<b>Сан:</b> <i>{passport[8]}</i>\n'
+    else:
+        stat = 'Резидента'
+        san = ''
+    passport_out = f'<a href="passport.{id}">{chr(8205)}</a><b>Паспорт</b>\n'
+    passport_out += f'<i>{stat} Ячмінії</i>\n\n'
+    passport_out += f'''<b>Ім'я:</b> <i>{user_link(passport[1], passport[2], passport[3])}</i>\n'''
+    passport_out += f"{san}"
     passport_out += f"<b>Стать:</b> <i>{passport[6]}</i>\n"
-    passport_out += f"<b>Статус:</b> <i>{passport[10]}</i>\n"
+    passport_out += f"<b>Рід:</b> <i>{passport[13]}</i>\n"
     passport_out += f"\n<i>Дата видачі:</i>"
     passport_out += f"\n<i>{passport[7]}</i>"
     return passport_out
@@ -403,9 +521,9 @@ def get_str_business(id):
     if business is None:
         return f'Вказано неправильний ідентифікатор підприємства'
     passport = get_passport(business[3])
-    business_out = f'<b>Підприємство</b>\n\n'
-    business_out += f'''<b>Назва:</b> <a href="https://t.me/businesses_yachminiya/{business[7]}">{business[2]}</a>\n'''
-    business_out += f'<b>Власник:</b> <i><a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a></i>\n'
+    business_out = f'<b>Підприємство</b>\n'
+    business_out += f'''<a href="https://t.me/businesses_yachminiya/{business[7]}">{business[2]}</a>\n\n'''
+    business_out += f'<b>Власник:</b> <i>{user_link(passport[1], passport[2], passport[3])}</i>\n'
     business_out += f"<b>Тег:</b> <code>{business[1]}</code>\n"
     business_out += f'<b>Активи</b>: <i>{business[4]} {glas(business[4])}</i>\n'
     return business_out
@@ -440,13 +558,33 @@ def get_str_rid(id):
     return rid_out
 
 
+def get_str_institution(name):
+    """повертає установу у вигляді str"""
+    inst = get_institution(name)
+    if inst is None:
+        return f'Вказано неправильну назва установи'
+    get_employers = get_inst_func(inst[1])[0]
+    emps = get_employers()
+    passport = get_passport(inst[6])
+    business_out = f'<b>Установа</b>\n'
+    business_out += f'''<a href="https://t.me/institutions_yachminiya/{inst[8]}">{inst[1]}</a>\n\n'''
+    business_out += f'<b>Голова:</b> <i>{user_link(passport[1], passport[2], passport[3])}</i>\n'
+    business_out += f'<b>Активи</b>: <i>{inst[3]} {glas(inst[3])}</i>\n\n'
+    if emps:
+        business_out += 'Працівники:\n'
+        for i in emps:
+            passport = get_passport(i[1])
+            business_out += f'<a href="t.me/{passport[5]}">{passport[2]} {passport[3]}</a>\n'
+    return business_out
+
+
 def get_str_aktives(id):
     passport = get_passport(id)
     if passport is None:
         try:
             user = get_user(id)
             if user is None:
-                u = get_chat(id)
+                u = bot.get_chat(id)
                 return f'{name(u)} не має громадянства Ячмінії.'
             else:
                 return f'{user[4]} не має громадянства Ячмінії.'
@@ -455,7 +593,7 @@ def get_str_aktives(id):
     businesses = get_business_owner((passport[1],))
     summa = 0
     aktives_out = f'<b>Активи</b>\n'
-    aktives_out += f'''<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>\n\n'''
+    aktives_out += f'''{user_link(passport[1], passport[2], passport[3])}\n\n'''
     for i in businesses:
         aktives_out += f'<a href="https://t.me/businesses_yachminiya/{i[7]}">{i[2]}</a> — {i[4]} {glas(i[4])}\n'
         summa += i[4]
@@ -476,6 +614,13 @@ def update_channel_business(business_name):
     business = get_business(business_name)
     business_out = get_str_business(business[1])
     bot.edit_message_text(chat_id=-1001162793975, text=business_out, message_id=business[5], parse_mode='HTML',
+                          disable_web_page_preview=True)
+
+
+def update_channel_institution(inst_name):
+    inst = get_institution(inst_name)
+    inst_out = get_str_institution(inst[1])
+    bot.edit_message_text(chat_id=-1001581103239, text=inst_out, message_id=inst[8], parse_mode='HTML',
                           disable_web_page_preview=True)
 
 
@@ -506,7 +651,7 @@ def get_str_acc(id):
         try:
             user = get_user(id)
             if user is None:
-                u = get_chat(id)
+                u = bot.get_chat(id)
                 return f'{name(u)} не має громадянства Ячмінії.'
             else:
                 return f'{user[4]} не має громадянства Ячмінії.'
@@ -521,7 +666,7 @@ def get_str_acc(id):
 
     account = f'Державний Банк\n'
     account += f'<b>Ячмінія</b>\n\n'
-    account += f'''Ім'я: <a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>\n'''
+    account += f'''Ім'я: {user_link(passport[1], passport[2], passport[3])}\n'''
     account += f'Код: <code>{passport[18]}</code>\n\n'
     account += f'Статки: {int(passport[9])} {glas(passport[9])}\n'
     account += f'Активи: {akt} {glas(akt)}\n'
@@ -563,6 +708,7 @@ def get_inst_func(inst_name):
     elif inst_name == 'Агітаційний відділ':
         # return get_all_agit()
         pass
+    return [lambda: []]
 
 
 @bot.message_handler(func=lambda m: m.chat.type == 'private', commands=['start', 'menu'])
@@ -583,14 +729,14 @@ def com_start(m):
               f'для новоприбулих</a>. Далі ми тобі радимо звернутись до Графства та оформити громадянство Ячмінії ' \
               f'(кнопка нижче). Бажаємо цікавого проведення часу!'
         bot.send_message(m.chat.id, out, reply_markup=keyboard, parse_mode='HTML', disable_web_page_preview=True)
-        # bot.send_message(-1001381818993, f'<a href="tg://user?id={u.id}">{html(name(u))}</a>\n{u.id}',
+        # bot.send_message(-1001381818993, f'{user_link(u.id, html(name(u))}\n{u.id}',
         # parse_mode='HTML')
         new_user(m.from_user)
         chats = get_all_chats()
         for i in chats:
             try:
-                bot.unban_chat_member(int(i[2]), m.from_user.id, True)
-                bot.promote_chat_member(int(i[2]), m.from_user.id)
+                bot.unban_chat_member(int(i[1]), m.from_user.id, True)
+                bot.promote_chat_member(int(i[1]), m.from_user.id)
             except:
                 pass
     else:
@@ -624,13 +770,23 @@ def com_start(m):
             if spl_code[0] == 'finzvit':
                 mess_id = int(spl_code[1])
                 msg = bot.forward_message(thrash, -1001543732225, mess_id)
-                print(msg.reply_markup.keyboard[0][0].url.split('=')[1].split('_')[2])
+                msg_id = int(msg.reply_markup.keyboard[0][0].url.split('=')[1].split('_')[2])
                 zvit_text = msg.text
-                inst = get_institution(acc_to_name[" ".join(zvit_text.split('\n')[0].split()[3:-3])])
+                inst = get_institution(inst_shorts[" ".join(zvit_text.split('\n')[0].split()[3:-3])])
                 if inst[6] == m.from_user.id:
                     button = types.InlineKeyboardButton(text='Розподілити отримані кошти',
-                                                        callback_data=f'finzvit_{spl_code[1]}_{spl_code[2]}')
+                                                        callback_data=f'finzvit_{spl_code[1]}_{spl_code[2]}_{msg_id}')
                     keyboard.add(button)
+            bot.copy_message(m.chat.id, -1001511247539, int(m_id), reply_markup=keyboard)
+        elif spl_code[0] == 'rozp':
+            passport = get_passport(m.from_user.id)
+            if passport is None:
+                keyboard = types.InlineKeyboardMarkup().add(
+                    types.InlineKeyboardButton(text='До головного меню', callback_data='menul'))
+                bot.send_message(m.chat.id, 'У вас нема громадянства Ячмінії', reply_markup=keyboard)
+                return
+            m_id = spl_code[2]
+            keyboard = types.InlineKeyboardMarkup()
             bot.copy_message(m.chat.id, -1001511247539, int(m_id), reply_markup=keyboard)
         elif code == 'prostir':
             prostir_f(m, False)
@@ -742,7 +898,7 @@ def callback_inline(call):
         keyboard = types.InlineKeyboardMarkup()
         keyboard = menu_footer(keyboard, 'all_info')
 
-        out = f'Активність\n<a href="tg://user?id={u.id}">{html(name(u))}</a>\n\n'
+        out = f'Активність\n{user_link(u.id, html(name(u)))}\n\n'
         out += f'Репутація: {usr[3]}\n'
         out += f'Повідомлень за весь час: {usr[7]}\n'
         out += f'Слів за весь час: {usr[8]}\n'
@@ -788,46 +944,71 @@ def callback_inline(call):
         return
 
     if call.data[0:9] == 'krime_sud':
-        def krime_sud(m):
-            if m.text == 'СТОП':
-                bot.send_message(m.chat.id, 'Ви відмінили процедуру подання заяви')
-                main_menu(m, False)
+        def get_guilty(m0):
+            if m0.text == 'СТОП':
+                bot.send_message(m0.chat.id, 'Ви відмінили процедуру подання заяви')
+                main_menu(m0, False)
                 return
-            if m.text.split()[0] != 'Стаття':
-                bot.send_message(m.chat.id, 'Неправильний формат повідомлення')
-                bot.register_next_step_handler(m, krime_sud)
-                return
-            if len(m.text.split()) < 3:
-                bot.send_message(m.chat.id, 'Неправильний формат повідомлення')
-                bot.register_next_step_handler(m, krime_sud)
-                return
-            try:
-                st = int(m.text.split()[1])
-            except:
-                bot.send_message(m.chat.id, 'Неправильний формат статті')
-                bot.register_next_step_handler(m, krime_sud)
-                return
-            bot.send_message(-1001457025006,
-                             f'<a href="tg://user?id={m.from_user.id}">{html(name(m.from_user))}</a> Стаття {st} проти '
-                             f'{" ".join(m.text.split()[2:])}',
-                             parse_mode='HTML')
-            bot.send_message(m.chat.id, "Ви успішно подали позов. Очікуйте, із вами скоро зв'яжуться")
-            main_menu(m, False)
 
-        text = f'''
-        Для подачі заяви у Карний Суд вам потрібно написати повідомлення у наступній формі:\n<code>Стаття [№ статті] 
-        [тег/нік/id винуватця]</code>\n
-        <a href="https://telegra.ph/Rozd%D1%96l-%D0%86%D0%86-Krim%D1%96naln%D1%96-pravoporushennya-04-24">Розділ ІІ 
-        Карного зводу. Кримінальні правопорушення</a>\nПісля відправки повідомлення із вами зв'яжуться для уточнення 
-        інформації та отримання доказів.\n{stop_text}
-        '''
+            guilty = m0.text.split(', ')
+            text = f'{alg}Вкажіть статтю, за якою ви здійснюєте позов. Якщо такий статей декілька, вкажіть їх ' \
+                   f'через кому. <a href="https://telegra.ph/Rozd%D1%96l-%D0%86%D0%86-Krim%D1%96naln%D1%96' \
+                   f'-pravoporushennya-04-24">Розділ ІІ Карного зводу. Кримінальні правопорушення</a> '
+
+            def get_articles(m1):
+                if m1.text == 'СТОП':
+                    bot.send_message(m0.chat.id, 'Ви відмінили процедуру подання заяви')
+                    main_menu(m0, False)
+                    return
+
+                articles = m1.text.split(', ')
+                text = f'{alg}Напишіть стислий та змістовний опис  позову. Обмеження по кількості символів — 2000.'
+
+                def get_description(m2):
+                    if m2.text == 'СТОП':
+                        bot.send_message(m0.chat.id, 'Ви відмінили процедуру подання заяви')
+                        main_menu(m0, False)
+                        return
+
+                    description = m2.text
+                    text = f'{alg}Надішліть усі докази.'
+                    messages = []
+
+                    def get_evidence(message):
+                        if message.text == 'ЗАВЕРШИТИ':
+                            pass
+                        else:
+                            messages.append(message)
+                            if len(messages)>9:
+                                pass
+                            else:
+                                register_next_step_handler(message, get_evidence)
+
+                    bot.send_message(text=text, chat_id=call.message.chat.id, parse_mode='HTML',
+                                     disable_web_page_preview=True)
+                    register_next_step_handler(m2, get_evidence)
+
+                bot.send_message(text=text, chat_id=call.message.chat.id, parse_mode='HTML',
+                                 disable_web_page_preview=True)
+                register_next_step_handler(m1, get_description)
+
+            bot.send_message(text=text, chat_id=call.message.chat.id, parse_mode='HTML', disable_web_page_preview=True)
+            register_next_step_handler(m0, get_articles)
+
+        link = '"https://telegra.ph/Algoritm-podach%D1%96-pozovu-09-23"'
+        alg = f'''Подача заяви відбувається за алгоритмом вказаним у <a href={link}>цій статті</a>.\n\n'''
+        text = f"{alg}" \
+               f"Вкажіть нік, тег, ідентифікатор або код особи, проти якої подається позов. Якщо таких осіб " \
+               f"декілька, вкажіть їх через кому (з пробілами).\n" \
+               f"{stop_text}"
+
         if call.data == 'krime_sud_nm':
             bot.edit_message_reply_markup(m.chat.id, m.message_id, reply_markup=None)
             bot.send_message(text=text, chat_id=call.message.chat.id, parse_mode='HTML', disable_web_page_preview=True)
         else:
             bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='HTML',
                                   disable_web_page_preview=True)
-        bot.register_next_step_handler(call.message, krime_sud)
+        register_next_step_handler(call.message, get_guilty)
         return
 
     if call.data == 'apel_sud':
@@ -837,7 +1018,7 @@ def callback_inline(call):
                 main_menu(m, False)
                 return
             bot.send_message(-1001203194174,
-                             f'<a href="tg://user?id={m.from_user.id}">{html(name(m.from_user))}</a>',
+                             f'{user_link(m.from_user.id, html(name(m.from_user)))}',
                              parse_mode='HTML')
             bot.forward_message(-1001203194174, m.chat.id, m.message_id)
             bot.send_message(m.chat.id, "Ви успішно подали позов. Очікуйте, із вами скоро зв'яжуться")
@@ -847,7 +1028,7 @@ def callback_inline(call):
         подаєте не апеляцію, детально опишіть ваш позов. {stop_text}'''
         bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='HTML',
                               disable_web_page_preview=True)
-        bot.register_next_step_handler(call.message, apel_sud)
+        register_next_step_handler(call.message, apel_sud)
         return
 
     if call.data == 'petition':
@@ -874,7 +1055,7 @@ def callback_inline(call):
                 return
             if len(m.text) > 100:
                 bot.send_message(m.chat.id, 'Занадто довга назва, спробуйте ще раз.')
-                bot.register_next_step_handler(m, petition_1)
+                register_next_step_handler(m, petition_1)
                 return
 
             def petition_2(m, title):
@@ -884,12 +1065,12 @@ def callback_inline(call):
                     return
                 if len(m.text) > 2000:
                     bot.send_message(m.chat.id, 'Занадто довгий текст петиції, спробуйте ще раз.')
-                    bot.register_next_step_handler(m, petition_2)
+                    register_next_step_handler(m, petition_2)
                     return
                 text = m.text
                 num = get_petition_last()
-                text_p = f'<b>{html(title)}</b>\nАвтор: <a href="tg://user?id={m.from_user.id}">' \
-                         f'{passport[2]} {passport[3]}</a>\n\n{html(text)}\n\n' \
+                text_p = f'<b>{html(title)}</b>\n' \
+                         f'Автор: {user_link(passport[1], passport[2], passport[3])}\n\n{html(text)}\n\n' \
                          f'<a href="https://t.me/c/1219790275/{int(num) + 1}">Підтримали петицію</a>'
                 keyboard = types.InlineKeyboardMarkup()
                 button = types.InlineKeyboardButton(text='Підтримати — 1', callback_data='petition_vote')
@@ -897,24 +1078,24 @@ def callback_inline(call):
                 # bot.send_message(-1001403193441, text_p, reply_markup=keyboard, parse_mode='HTML',
                 # disable_web_page_preview=True)
                 text_p = f'<a href="https://t.me/c/1403193441/{int(num) + 1}">{html(title)}</a>\n\n' \
-                         f'<a href="tg://user?id={m.from_user.id}">{passport[2]} {passport[3]}</a> id:{m.from_user.id}'
+                         f'{user_link(passport[1], passport[2], passport[3])} id:{m.from_user.id}'
                 # bot.send_message(-1001219790275, text_p, parse_mode='HTML', disable_web_page_preview=True)
                 insert_petition_last(num + 1)
                 bot.send_message(m.chat.id,
                                  f'Петиція успішно подана.\n'
-                                 f'<a href="https://t.me/c/1403193441/{int(num) + 1}">Посилання</a>',
+                                 f'<a href="https://t.me/c/1403193441/{int(num) + 1}">Посилання</a>',  # TODO
                                  parse_mode='HTML')
                 main_menu(m, False)
 
             bot.send_message(m.chat.id,
                              f'Введіть текст петиції. Максимальна довжина тексту — 2000 символів.\n{stop_text}',
                              parse_mode='HTML')
-            bot.register_next_step_handler(m, petition_2, m.text)
+            register_next_step_handler(m, petition_2, m.text)
 
         text = f'''Напишіть заголовок петиції. Максимальна довжина заголовку — 100 символів.\n{stop_text}'''
         bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='HTML',
                               disable_web_page_preview=True)
-        bot.register_next_step_handler(call.message, petition_1)
+        register_next_step_handler(call.message, petition_1)
         return
 
     if call.data == 'petition_vote':
@@ -934,7 +1115,7 @@ def callback_inline(call):
         for i in range(2, len(text)):
             text_p += f'<a href="tg://user?id={text[i].split()[-1][3:]}">{" ".join(text[i].split()[:-1])}</a> ' \
                       f'{text[i].split()[-1]}\n'
-        text_p += f'<a href="tg://user?id={call.from_user.id}">{passport[2]} {passport[3]}</a> id:{call.from_user.id}'
+        text_p += f'{user_link(call.from_user.id, passport[2], passport[3])} id:{call.from_user.id}'
         bot.edit_message_text(text=text_p, chat_id=-1001219790275, message_id=call.message.message_id,
                               parse_mode='HTML', disable_web_page_preview=True)
         keyboard = types.InlineKeyboardMarkup()
@@ -1036,14 +1217,14 @@ def callback_inline(call):
             if rid:
                 bot.send_message(m.chat.id,
                                  f'Такий рід уже існує. Придумайте іншу назву і відправте знову. {stop_text}')
-                bot.register_next_step_handler(m, form_bus)
+                register_next_step_handler(m, form_bus)
                 return
 
             if rid_name == 'Самітник' or rid_name == 'Самітники':
                 bot.send_message(m.chat.id,
                                  f'Не можна використовувати назви "Самітник" та "Самітники". '
                                  f'Спробуйте ще раз. {stop_text}')
-                bot.register_next_step_handler(m, form_bus)
+                register_next_step_handler(m, form_bus)
                 return
 
             business_out = f'Ваш рід матиме назву <b>{rid_name}</b>. <b>Увага!</b> Реєстрація роду коштує 500 ячок. ' \
@@ -1062,7 +1243,7 @@ def callback_inline(call):
             text=f'Придумайте назву свого роду. <b>Увага!</b> Не можна використовувати назви "Самітник" та '
                  f'"Самітники". {stop_text}',
             message_id=call.message.id, chat_id=call.message.chat.id, parse_mode='HTML')
-        bot.register_next_step_handler(call.message, form_bus)
+        register_next_step_handler(call.message, form_bus)
 
     if call.data == 'rid_done':
         bot.edit_message_text(
@@ -1114,14 +1295,14 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Ви не можете прийняти себе у свій же рід)\nСпробуйте ще раз)\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, new_emp_id)
+                register_next_step_handler(m, new_emp_id)
                 return
 
             if not m.text.isdigit():
                 bot.send_message(m.chat.id,
                                  f'Вказаний неправильний ідентифікатор особи. Спробуйте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, new_emp_id)
+                register_next_step_handler(m, new_emp_id)
                 return
 
             id = int(m.text)
@@ -1131,15 +1312,15 @@ def callback_inline(call):
                                  f'Вказаний неправильний ідентифікатор або особа не має паспорта Ячмінії. '
                                  f'Спробуйте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, new_emp_id)
+                register_next_step_handler(m, new_emp_id)
                 return
 
             if new_emp[13] != 'Самітник':
                 bot.send_message(m.chat.id,
-                                 f'<a href="tg://user?id={new_emp[1]}">{new_emp[2]} {new_emp[3]}</a> уже є членом '
+                                 f'{user_link(new_emp[1], new_emp[2], new_emp[3])} уже є членом '
                                  f'роду {new_emp[13]}. Спробуйте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, new_emp_id)
+                register_next_step_handler(m, new_emp_id)
                 return
 
             passport = get_passport(u.id)
@@ -1150,7 +1331,7 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Цей громадянин уже є членом вашого роду. Спробуйте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, new_emp_id)
+                register_next_step_handler(m, new_emp_id)
                 return
             try:
                 keyboard = types.InlineKeyboardMarkup()
@@ -1162,7 +1343,7 @@ def callback_inline(call):
                                  f'Вас хочуть прийняти у рід <a href="t.me/FamilyRegistry/{rid[5]}">{rid[1]}</a>',
                                  parse_mode='HTML', disable_web_page_preview=True, reply_markup=keyboard)
                 bot.send_message(m.chat.id,
-                                 f'<a href="tg://user?id={new_emp[1]}">{new_emp[2]} {new_emp[3]}</a> отримав '
+                                 f'{user_link(new_emp[1], new_emp[2], new_emp[3])} отримав '
                                  f'повідомлення про прийняття у рід. Очікуйте підвердження.',
                                  parse_mode='HTML')
             except:
@@ -1171,7 +1352,7 @@ def callback_inline(call):
                                  'відновив чат з Системою.')
             rid_f(u, m, False)
 
-        bot.register_next_step_handler(call.message, new_emp_id)
+        register_next_step_handler(call.message, new_emp_id)
         return
 
     if call.data == 'edit_rid':
@@ -1186,7 +1367,7 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Такий рід уже існує. Придумайте іншу назву і відправте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, form_bus)
+                register_next_step_handler(m, form_bus)
                 return
 
             if rid_name == 'Самітник' or rid_name == 'Самітники':
@@ -1194,7 +1375,7 @@ def callback_inline(call):
                                  f'Не можна використовувати назви "Самітник" та "Самітники". '
                                  f'Спробуйте ще раз.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, form_bus)
+                register_next_step_handler(m, form_bus)
                 return
 
             business_out = f'Ваш рід матиме назву <b>{rid_name}</b>.'
@@ -1211,7 +1392,7 @@ def callback_inline(call):
             text=f'Придумайте нову назву роду. <b>Увага!</b> Не можна використовувати назви "Самітник" та '
                  f'"Самітники".\n{stop_text}.',
             message_id=call.message.id, chat_id=call.message.chat.id, parse_mode='HTML')
-        bot.register_next_step_handler(call.message, form_bus)
+        register_next_step_handler(call.message, form_bus)
 
     if call.data == 'edit_rid_done':
         bot.edit_message_text(
@@ -1259,7 +1440,7 @@ def callback_inline(call):
                               chat_id=call.message.chat.id)
         employer = get_passport(call.from_user.id)
         bot.send_message(int(rid[2]),
-                         f'<a href="tg://user?id={employer[1]}">{employer[2]} {employer[3]}</a> '
+                         f'{user_link(employer[1], employer[16], employer[17])} '
                          f'став членом роду {rid[1]}!',
                          parse_mode='HTML')
         employer[13] = rid[1]
@@ -1280,7 +1461,7 @@ def callback_inline(call):
                               chat_id=call.message.chat.id)
         employer = get_passport(call.from_user.id)
         bot.send_message(rid[2],
-                         f'<a href="tg://user?id={employer[1]}">{employer[2]} {employer[3]}</a> відмовився від '
+                         f'{user_link(employer[1], employer[16], employer[17])} відмовився від '
                          f'запиту на прийняття у рід',
                          parse_mode='HTML')
         return
@@ -1327,7 +1508,7 @@ def callback_inline(call):
         button = types.InlineKeyboardButton(text="🚷Вилучити члена роду", callback_data='del_member')
         keyboard.add(button)
         keyboard = menu_footer(keyboard, 'rid_members')
-        bot.edit_message_text(f'<a href="tg://user?id={rid_member[1]}">{rid_member[2]} {rid_member[3]}</a>',
+        bot.edit_message_text(f'{user_link(rid_member[1], rid_member[16], rid_member[17])}',
                               chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode='HTML',
                               reply_markup=keyboard)
 
@@ -1444,7 +1625,7 @@ def callback_inline(call):
         button = types.InlineKeyboardButton(text="🚷Звільнити працівника", callback_data='del_employer')
         keyboard.add(button)
         keyboard = menu_footer(keyboard, f"praciv")
-        bot.edit_message_text(f'<a href="tg://user?id={employer[1]}">{employer[2]} {employer[3]}</a>',
+        bot.edit_message_text(f'{user_link(employer[1], employer[16], employer[17])}',
                               chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode='HTML',
                               reply_markup=keyboard)
 
@@ -1469,7 +1650,7 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Ви не можете найняти себе на свою ж роботу)\nСпробуйте ще раз)\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, new_emp_id)
+                register_next_step_handler(m, new_emp_id)
                 return
 
             new_emp = get_passport(int(m.text))
@@ -1478,7 +1659,7 @@ def callback_inline(call):
                                  f'Вказаний неправильний ідентифікатор або особа не має паспорта Ячмінії. Спробуйте '
                                  f'знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, new_emp_id)
+                register_next_step_handler(m, new_emp_id)
                 return
 
             employers = business[5].split()
@@ -1487,7 +1668,7 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Цей громадянин уже працює у вашому підприємстві. Спробуйте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, new_emp_id)
+                register_next_step_handler(m, new_emp_id)
                 return
 
             keyboard = types.InlineKeyboardMarkup()
@@ -1501,7 +1682,7 @@ def callback_inline(call):
                                  f'<a href="t.me/businesses_yachminiya/{business[7]}">{business[2]}</a>',
                                  parse_mode='HTML', disable_web_page_preview=True, reply_markup=keyboard)
                 bot.send_message(m.chat.id,
-                                 f'<a href="tg://user?id={new_emp[1]}">{new_emp[2]} {new_emp[3]}</a> отримав '
+                                 f'{user_link(new_emp[1], new_emp[2], new_emp[3])} отримав '
                                  f'повідомлення про найняття на роботу. Очікуйте підвердження.',
                                  parse_mode='HTML')
             except:
@@ -1511,7 +1692,7 @@ def callback_inline(call):
                                  'відновив чат з Системою.')
             business_f(business, m, False)
 
-        bot.register_next_step_handler(call.message, new_emp_id)
+        register_next_step_handler(call.message, new_emp_id)
         return
 
     if call.data == "new_employer_done":
@@ -1536,7 +1717,7 @@ def callback_inline(call):
         insert_passport_a(employer)
         try:
             bot.send_message(int(business[3]),
-                             f'<a href="tg://user?id={employer[1]}">{employer[2]} {employer[3]}</a> став працівником '
+                             f'{user_link(employer[1], employer[16], employer[17])} став працівником '
                              f'підприємства {business[2]}!',
                              parse_mode='HTML')
         except:
@@ -1571,7 +1752,7 @@ def callback_inline(call):
                                              f'Неправильний тег. Придумайте інший тег і '
                                              f'відправте форму знову.\n{stop_text}.',
                                              parse_mode='HTML')
-                            bot.register_next_step_handler(m, form_bus)
+                            register_next_step_handler(m, form_bus)
                             return
 
                 business = get_business(namep)
@@ -1581,7 +1762,7 @@ def callback_inline(call):
                                      f'Підприємство з такою назвою або тегом уже існує. Придумайте іншу назву і '
                                      f'відправте форму знову.\n{stop_text}.',
                                      parse_mode='HTML')
-                    bot.register_next_step_handler(m, form_bus)
+                    register_next_step_handler(m, form_bus)
                     return
 
                 business = get_business(tag)
@@ -1591,7 +1772,7 @@ def callback_inline(call):
                                      f'Підприємство з такою назвою або тегом уже існує. Придумайте іншу назву і '
                                      f'відправте форму знову.\n{stop_text}.',
                                      parse_mode='HTML')
-                    bot.register_next_step_handler(m, form_bus)
+                    register_next_step_handler(m, form_bus)
                     return
 
                 passport = get_passport(m.from_user.id)
@@ -1599,7 +1780,7 @@ def callback_inline(call):
                 business_out = f'Шаблон підприємства\n\n'
                 business_out += f'''<b>Назва:</b> <i>{namep}</i>\n'''
                 business_out += f'''<b>Власник:</b> 
-                <i><a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a></i>\n'''
+                <i>{user_link(passport[1], passport[2], passport[3])}</i>\n'''
                 business_out += f"<b>Тег:</b> <i>{tag}</i>\n"
                 business_out += f"<b>Рід діяльності:</b> <i>{about}</i>\n"
                 keyboard = types.InlineKeyboardMarkup()
@@ -1612,12 +1793,12 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  '''Ви неправильно ввели форму. Перевірте будь ласка:\n1. Чи ви скопіювали саме форму, 
                                  а не все повідомлення?\n2. Чи стоять пропуски після пунктів форми?''')
-                bot.register_next_step_handler(call.message, form_bus)
+                register_next_step_handler(call.message, form_bus)
                 return
 
         bot.edit_message_text(text=business_form, message_id=call.message.id, chat_id=call.message.chat.id,
                               parse_mode='HTML')
-        bot.register_next_step_handler(call.message, form_bus)
+        register_next_step_handler(call.message, form_bus)
 
     if call.data == "new_employer_cancel":
         url = call.message.entities[0].url
@@ -1631,7 +1812,7 @@ def callback_inline(call):
         employer = get_passport(call.from_user.id)
         try:
             bot.send_message(int(business[3]),
-                             f'<a href="tg://user?id={employer[1]}">{employer[2]} {employer[3]}</a> відмовився від '
+                             f'{user_link(employer[1], employer[16], employer[17])} відмовився від '
                              f'запиту на найняття на роботу',
                              parse_mode='HTML')
         except:
@@ -1684,7 +1865,7 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  '''Ви неправильно ввели форму. Перевірте будь ласка:\n1. Чи ви скопіювали саме форму, 
                                  а не все повідомлення?\n2. Чи стоять пропуски після пунктів форми?''')
-                bot.register_next_step_handler(call.message, form_bus)
+                register_next_step_handler(call.message, form_bus)
                 return
 
             low = 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', \
@@ -1695,21 +1876,21 @@ def callback_inline(call):
                         bot.send_message(m.chat.id,
                                          f'Неправильний тег. Придумайте інший тег і відправте форму знову.\n{stop_text}.',
                                          parse_mode='HTML')
-                        bot.register_next_step_handler(m, form_bus)
+                        register_next_step_handler(m, form_bus)
                         return
 
             if tag == '':
                 bot.send_message(m.chat.id,
                                  f'Неправильний тег. Придумайте інший тег і відправте форму знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, form_bus)
+                register_next_step_handler(m, form_bus)
                 return
 
             if namep == '':
                 bot.send_message(m.chat.id,
                                  f'Неправильна назва. Придумайте іншу назву і відправте форму знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, form_bus)
+                register_next_step_handler(m, form_bus)
                 return
 
             if about == '.' or about == ' .':
@@ -1717,7 +1898,7 @@ def callback_inline(call):
                                  f'Замість крапки в рід діяльності треба щось вписати. '
                                  f'Заповніть форму заново\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, form_bus)
+                register_next_step_handler(m, form_bus)
                 return
 
             business = get_business(namep)
@@ -1726,7 +1907,7 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Підприємство з такою назвою або тегом уже існує. Придумайте іншу назву і '
                                  f'відправте форму знову.\n{stop_text}.')
-                bot.register_next_step_handler(m, form_bus)
+                register_next_step_handler(m, form_bus)
                 return
 
             business = get_business(tag)
@@ -1735,7 +1916,7 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Підприємство з такою назвою або тегом уже існує. Придумайте іншу назву і '
                                  f'відправте форму знову.\n{stop_text}.')
-                bot.register_next_step_handler(m, form_bus)
+                register_next_step_handler(m, form_bus)
                 return
 
             passport = get_passport(m.from_user.id)
@@ -1746,7 +1927,7 @@ def callback_inline(call):
                            f'буде відхилена\n\n'
             business_out += f'''<b>Назва:</b> <i>{namep}</i>\n'''
             business_out += f'''<b>Власник:</b> <i>
-            <a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a></i>\n'''
+            {user_link(passport[1], passport[2], passport[3])}</i>\n'''
             business_out += f"<b>Тег:</b> <i>{tag}</i>\n"
             business_out += f"<b>Рід діяльності:</b> <i>{about}</i>\n"
             keyboard = types.InlineKeyboardMarkup()
@@ -1761,7 +1942,7 @@ def callback_inline(call):
 
         bot.edit_message_text(text=business_form, message_id=call.message.id, chat_id=call.message.chat.id,
                               parse_mode='HTML')
-        bot.register_next_step_handler(call.message, form_bus)
+        register_next_step_handler(call.message, form_bus)
 
     if call.data == 'business_done':
         mess = call.message.text.split('\n')
@@ -1780,7 +1961,7 @@ def callback_inline(call):
         passport[9] = passport[9] - 500
         business_out = f'<b>Підприємство</b>\n\n'
         business_out += f'''<b>Назва:</b> <i>{namep}</i>\n'''
-        business_out += f'<b>Власник:</b> <i><a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a></i>\n'
+        business_out += f'<b>Власник:</b> <i>{user_link(passport[1], passport[2], passport[3])}</i>\n'
         business_out += f"<b>Тег:</b> <code>{tag}</code>\n"
         business_out += f'<b>Активи</b>: <i>0 ячок</i>'
         n = bot.send_message(-1001162793975, business_out, parse_mode='HTML').id
@@ -1827,14 +2008,14 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Неправильний формат числа. Спробуйте ще раз. {stop_text}',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, new_bill_f)
+                register_next_step_handler(m, new_bill_f)
                 return
 
             if new_bill < 0:
                 bot.send_message(m.chat.id,
                                  f"Зарплата не може бути від'ємною. Спробуйте ще раз. {stop_text}",
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, new_bill_f)
+                register_next_step_handler(m, new_bill_f)
                 return
 
             bills = business[6].split()
@@ -1854,7 +2035,7 @@ def callback_inline(call):
             except:
                 pass
 
-        bot.register_next_step_handler(call.message, new_bill_f)
+        register_next_step_handler(call.message, new_bill_f)
         return
 
     if call.data == 'del_employer':
@@ -1948,7 +2129,7 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Неправильний формат вхідних даних. Спробуйте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, transfer)
+                register_next_step_handler(m, transfer)
                 return
             try:
                 amount_m = int(mess[1])
@@ -1956,14 +2137,14 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Введено хибну кількість ячок.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, transfer)
+                register_next_step_handler(m, transfer)
                 return
 
             if amount_m < 1:
                 bot.send_message(m.chat.id,
                                  f'Вкажіть додатню кількість ячок для переказу. Спробуйте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, transfer)
+                register_next_step_handler(m, transfer)
                 return
             acc_t = get_passport(mess[0])
             bus = False
@@ -1974,7 +2155,7 @@ def callback_inline(call):
                     bot.send_message(m.chat.id,
                                      f'Введено хибний ідентифікатор отримувача. Спробуйте знову.\n{stop_text}',
                                      parse_mode='HTML')
-                    bot.register_next_step_handler(m, transfer)
+                    register_next_step_handler(m, transfer)
                     return
 
             if len(mess) > 2:
@@ -1987,7 +2168,7 @@ def callback_inline(call):
                                  f'На рахунку підприємства {business[2]} недостатньо коштів для переказу. '
                                  f'Спробуйте меншу суму.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, transfer)
+                register_next_step_handler(m, transfer)
                 return
 
             comm = commission(int(amount_m), 1)
@@ -1997,7 +2178,7 @@ def callback_inline(call):
                                  f'На рахунку підприємства {business[2]} недостатньо коштів для списання комісії. '
                                  f'Спробуйте меншу суму коштів.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, transfer)
+                register_next_step_handler(m, transfer)
                 return
 
             business[4] = business[4] - amount_m - comm
@@ -2008,7 +2189,7 @@ def callback_inline(call):
                 money_t = acc_t[4]
             else:
                 acc_t[9] = acc_t[9] + amount_m
-                namep2 = f'<a href="tg://user?id={acc_t[1]}">{acc_t[2]} {acc_t[3]}</a>'
+                namep2 = f'{user_link(acc_t[1], acc_t[2], acc_t[3])}'
                 money_t = acc_t[9]
 
             msg = f'Державний Банк\n'
@@ -2064,7 +2245,7 @@ def callback_inline(call):
             update_channel_rid(acc_g[13])
             update_channel_rid(acc_t[13])
 
-        bot.register_next_step_handler(m, transfer)
+        register_next_step_handler(m, transfer)
         return
 
     if call.data == 'withdraw':
@@ -2086,7 +2267,7 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Неправильний формат вхідних даних. Спробуйте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, withdraw)
+                register_next_step_handler(m, withdraw)
                 return
 
             if business[4] < amount_m:
@@ -2094,20 +2275,20 @@ def callback_inline(call):
                                  f'На рахунку вашого підприємства недостатньо грошей для зняття. Спробуйте знову.'
                                  f'\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, withdraw)
+                register_next_step_handler(m, withdraw)
                 return
 
             if amount_m < 1:
                 bot.send_message(m.chat.id,
                                  f'Вкажіть додатню кількість грошей для зняття. Спробуйте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, withdraw)
+                register_next_step_handler(m, withdraw)
                 return
 
             business[4] = business[4] - amount_m
             acc_t[9] = acc_t[9] + amount_m
 
-            namep = f'<a href="tg://user?id={acc_t[1]}">{acc_t[2]} {acc_t[3]}</a>'
+            namep = f'{user_link(acc_t[1], acc_t[2], acc_t[3])}'
             money_t = acc_t[9]
 
             msg = f'Державний Банк\n'
@@ -2130,7 +2311,7 @@ def callback_inline(call):
             text=f'{business[2]}\nВведіть суму коштів, яку ви хочете зняти з рахунку підприємства\n{stop_text}\n'
                  f'Активи: {business[4]} {glas(business[4])}\nСтатки: {acc_t[11]} {glas(acc_t[11])}',
             message_id=call.message.message_id, chat_id=call.message.chat.id, parse_mode='HTML')
-        bot.register_next_step_handler(call.message, withdraw)
+        register_next_step_handler(call.message, withdraw)
         return
 
     if call.data == 'count':
@@ -2152,7 +2333,7 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Неправильний формат вхідних даних. Спробуйте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, count)
+                register_next_step_handler(m, count)
                 return
 
             if acc_g[9] < amount_m:
@@ -2160,20 +2341,20 @@ def callback_inline(call):
                                  f'На вашому рахунку недостатньо грошей для нарахування. Спробуйте знову.'
                                  f'\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, count)
+                register_next_step_handler(m, count)
                 return
 
             if amount_m < 1:
                 bot.send_message(m.chat.id,
                                  f'Вкажіть додатню кількість грошей для нараховувати. Спробуйте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, count)
+                register_next_step_handler(m, count)
                 return
 
             business[4] = business[4] + amount_m
             acc_g[9] = acc_g[9] - amount_m
 
-            namep = f'<a href="tg://user?id={acc_g[1]}">{acc_g[2]} {acc_g[3]}</a>'
+            namep = f'{user_link(acc_g[1], acc_g[2], acc_g[3])}'
             money_t = acc_g[9]
 
             msg = f'Державний Банк\n'
@@ -2196,7 +2377,7 @@ def callback_inline(call):
             text=f'{business[2]}\nВведіть суму коштів, яку ви хочете зняти з рахунку підприємства\n{stop_text}\n'
                  f'Активи: {business[4]} {glas(business[4])}\nСтатки: {acc_g[9]} {glas(acc_g[9])}',
             message_id=call.message.message_id, chat_id=call.message.chat.id, parse_mode='HTML')
-        bot.register_next_step_handler(call.message, count)
+        register_next_step_handler(call.message, count)
         return
 
     if call.data == 'salary':
@@ -2314,7 +2495,7 @@ def callback_inline(call):
         return
 
     if call.data in (
-    'Протектор', 'Граф', 'Скарбник', 'Старший Жандарм', 'Молодший Жандарм', 'Новобранець', 'Віконт', 'Карб'):
+            'Протектор', 'Граф', 'Скарбник', 'Старший Жандарм', 'Молодший Жандарм', 'Новобранець', 'Віконт', 'Карб'):
         state_emps_name = None
         if call.data in ('Протектор', 'Граф', 'Скарбник'):
             head = True
@@ -2390,7 +2571,7 @@ def callback_inline(call):
         else:
             return
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                              text=f'{emp[2]}\n<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>'
+                              text=f'{emp[2]}\n{user_link(passport[1], passport[2], passport[3])}'
                                    f'\n\n{doings_word} за весь час: {emp[3]}\n{doings_word} за час підзвітності: '
                                    f'{emp[4]}{end}',
                               reply_markup=keyboard, parse_mode='HTML')
@@ -2476,7 +2657,7 @@ def callback_inline(call):
             white1 = ' ' * (name_len - loc_name_len)
             white2 = ' ' * (per_len - loc_per_len)
             white3 = ' ' * (all_len - loc_all_len)
-            msg_out += f'<code><a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>' \
+            msg_out += f'<code>{user_link(passport[1], passport[2], passport[3])}' \
                        f'{white1} {white3}{i[4]} {white2}{i[3]}</code>\n'
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                               text=msg_out, reply_markup=keyboard, parse_mode='HTML')
@@ -2509,7 +2690,7 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Вказаний неправильний ідентифікатор особи. Спробуйте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, new_emp_id)
+                register_next_step_handler(m, new_emp_id)
                 return
 
             id = int(m.text)
@@ -2519,7 +2700,7 @@ def callback_inline(call):
                                  f'Вказаний неправильний ідентифікатор або особа не має паспорта Ячмінії. Спробуйте '
                                  f'знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, new_emp_id)
+                register_next_step_handler(m, new_emp_id)
                 return
 
             emp = get_employer(id)
@@ -2527,7 +2708,7 @@ def callback_inline(call):
                 bot.send_message(m.chat.id,
                                  f'Цей громадянин уже є працівником вашої установи. Спробуйте знову.\n{stop_text}.',
                                  parse_mode='HTML')
-                bot.register_next_step_handler(m, new_emp_id)
+                register_next_step_handler(m, new_emp_id)
                 return
 
             try:
@@ -2541,7 +2722,7 @@ def callback_inline(call):
                                  f'призначення.',
                                  parse_mode='HTML', disable_web_page_preview=True, reply_markup=keyboard)
                 bot.send_message(m.chat.id,
-                                 f'<a href="tg://user?id={new_emp[1]}">{new_emp[2]} {new_emp[3]}</a> отримав '
+                                 f'{user_link(new_emp[1], new_emp[2], new_emp[3])} отримав '
                                  f'повідомлення про призначення Новобранцем. Очікуйте підвердження.',
                                  parse_mode='HTML')
             except:
@@ -2550,7 +2731,7 @@ def callback_inline(call):
                                  'відновив чат з Системою.')
             state_menu_f(u, m, False)
 
-        bot.register_next_step_handler(call.message, new_emp_id)
+        register_next_step_handler(call.message, new_emp_id)
         return
 
     if spl_data[0] == 'done' and spl_data[1] == 'new':
@@ -2607,15 +2788,14 @@ def callback_inline(call):
         passport[11] = bill
         insert_passport_a(passport)
         insert_user_a(user)
-        out = f'<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>\n{old_san} ⟹ {passport[8]}'
+        out = f'{user_link(passport[1], passport[2], passport[3])}\n{old_san} ⟹ {passport[8]}'
         # bot.send_message(-1001268255961, out, parse_mode='HTML')
         head = get_passport(inst[6])
         out = doc.replace('/link/', inst[5]).replace('/num/', str(inst[4] + 1)).replace(
             '/date/', datetime.now().date().strftime("%d.%m.%Y")).replace('/head_link/',
-                                                                          f'<a href="tg://user?id={head[1]}">{head[2]} '
-                                                                          f'{head[3]}</a>').replace(
-            '/new_emp_acc_link/', f'<a href="tg://user?id={passport[1]}">{passport[16]} {passport[17]}</a>').replace(
-            '/new_emp_link/', f'<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>')
+                                                                          f'{user_link(head[1], head[2], head[3])}'). \
+            replace('/new_emp_acc_link/', f'{user_link(passport[1], passport[16], passport[17])}'). \
+            replace('/new_emp_link/', f'{user_link(passport[1], passport[2], passport[3])}')
         bot.send_message(-1001124854070, out, parse_mode='HTML')
         new_emp(u)
         inst[4] += 1
@@ -2639,7 +2819,7 @@ def callback_inline(call):
         employer = get_passport(u.id)
         try:
             bot.send_message(inst[6],
-                             f'<a href="tg://user?id={employer[1]}">{employer[2]} {employer[3]}</a> відмовився від '
+                             f'{user_link(employer[1], employer[16], employer[17])} відмовився від '
                              f'запиту на призначення на сан {new_emp_name}',
                              parse_mode='HTML')
         except:
@@ -2701,7 +2881,7 @@ def callback_inline(call):
         button = types.InlineKeyboardButton(text=f'Звільнити {emp_name}', callback_data='del_zh')
         keyboard.add(button)
         keyboard = menu_footer(keyboard, f'list_of_{spl_data[3]}')
-        bot.edit_message_text(text=f'{emp[2]}\n<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>',
+        bot.edit_message_text(text=f'{emp[2]}\n{user_link(passport[1], passport[2], passport[3])}',
                               chat_id=m.chat.id, message_id=m.message_id, reply_markup=keyboard, parse_mode='HTML')
         return
 
@@ -2717,7 +2897,7 @@ def callback_inline(call):
         keyboard = menu_footer(keyboard, f'zhandarm{u.id}')
         passport = get_passport(u.id)
         bot.edit_message_text(
-            text=f'{rank}\n<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>\nОберіть нове звання '
+            text=f'{rank}\n{user_link(passport[1], passport[2], passport[3])}\nОберіть нове звання '
                  f'Жандарма',
             chat_id=m.chat.id, message_id=m.message_id, reply_markup=keyboard, parse_mode='HTML')
         return
@@ -2735,7 +2915,7 @@ def callback_inline(call):
         else:
             rank = 'Старшого Жандарма'
         bot.edit_message_text(
-            text=f'Ви дійсно хочете підвищити <a href="tg://user?id={passport[1]}">{passport[16]} {passport[17]}</a> '
+            text=f'Ви дійсно хочете підвищити {user_link(passport[1], passport[16], passport[17])} '
                  f'до звання {rank}?',
             chat_id=m.chat.id, message_id=m.message_id, reply_markup=keyboard, parse_mode='HTML')
         return
@@ -2758,7 +2938,7 @@ def callback_inline(call):
         button = types.InlineKeyboardButton(text='До меню Протектора', callback_data='Протектор')
         keyboard.add(button)
         bot.edit_message_text(
-            f'<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a> підвищений у званні до {rank_g}',
+            f'{user_link(passport[1], passport[2], passport[3])} підвищений у званні до {rank_g}',
             message_id=call.message.message_id,
             chat_id=call.message.chat.id, parse_mode='HTML', reply_markup=keyboard)
 
@@ -2781,7 +2961,7 @@ def callback_inline(call):
         passport[11] = bill
         insert_passport_a(passport)
         insert_user_a(user)
-        out = f'<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>\n{old_san} ⟹ {passport[8]}'
+        out = f'{user_link(passport[1], passport[2], passport[3])}\n{old_san} ⟹ {passport[8]}'
         # bot.send_message(-1001268255961, out, parse_mode='HTML')
         inst = get_institution('Жандармерія')
         head = get_passport(inst[6])
@@ -2789,7 +2969,7 @@ def callback_inline(call):
             '/date/', datetime.now().date().strftime("%d.%m.%Y")).replace('/prot_link/',
                                                                           f'<a href="tg://user?id={head[1]}">{head[2]} '
                                                                           f'{head[3]}</a>').replace(
-            '/up_zhan_acc_link/', f'<a href="tg://user?id={passport[1]}">{passport[16]} {passport[17]}</a>').replace(
+            '/up_zhan_acc_link/', f'{user_link(passport[1], passport[16], passport[17])}').replace(
             '/rank_g/', rank_g)
         bot.send_message(-1001124854070, out, parse_mode='HTML')
         emp = get_zhan(u.id)
@@ -2812,7 +2992,7 @@ def callback_inline(call):
         else:
             rank = 'Новобранця'
         bot.edit_message_text(
-            text=f'Ви дійсно хочете понизити <a href="tg://user?id={passport[1]}">{passport[16]} {passport[17]}</a> '
+            text=f'Ви дійсно хочете понизити {user_link(passport[1], passport[16], passport[17])} '
                  f'до звання {rank}?',
             chat_id=m.chat.id, message_id=m.message_id, reply_markup=keyboard, parse_mode='HTML')
         return
@@ -2835,7 +3015,7 @@ def callback_inline(call):
         button = types.InlineKeyboardButton(text='До меню Протектора', callback_data='Протектор')
         keyboard.add(button)
         bot.edit_message_text(
-            f'<a href="tg://user?id={passport[1]}">{passport[16]} {passport[17]}</a> понижений у званні до {rank_g}',
+            f'{user_link(passport[1], passport[16], passport[17])} понижений у званні до {rank_g}',
             message_id=call.message.message_id,
             chat_id=call.message.chat.id, parse_mode='HTML', reply_markup=keyboard)
 
@@ -2858,7 +3038,7 @@ def callback_inline(call):
         passport[11] = bill
         insert_passport_a(passport)
         insert_user_a(user)
-        out = f'<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>\n{old_san} ⟹ {passport[8]}'
+        out = f'{user_link(passport[1], passport[2], passport[3])}\n{old_san} ⟹ {passport[8]}'
         # bot.send_message(-1001268255961, out, parse_mode='HTML')
         inst = get_institution('Жандармерія')
         head = get_passport(inst[6])
@@ -2866,7 +3046,7 @@ def callback_inline(call):
             '/date/', datetime.now().date().strftime("%d.%m.%Y")).replace('/prot_link/',
                                                                           f'<a href="tg://user?id={head[1]}">{head[2]} '
                                                                           f'{head[3]}</a>').replace(
-            '/down_zhan_acc_link/', f'<a href="tg://user?id={passport[1]}">{passport[16]} {passport[17]}</a>').replace(
+            '/down_zhan_acc_link/', f'{user_link(passport[1], passport[16], passport[17])}').replace(
             '/rank_g/', rank_g)
         bot.send_message(-1001124854070, out, parse_mode='HTML')
         emp = get_zhan(u.id)
@@ -2893,7 +3073,7 @@ def callback_inline(call):
         keyboard = menu_footer(keyboard, f'state_emp_{u.id}_{spl_data[1]}')
         passport = get_passport(u.id)
         bot.edit_message_text(
-            text=f'Ви дійсно хочете звільнити <a href="tg://user?id={passport[1]}">{passport[16]} {passport[17]}</a> '
+            text=f'Ви дійсно хочете звільнити {user_link(passport[1], passport[16], passport[17])} '
                  f'з сану {emp_name}?',
             chat_id=m.chat.id, message_id=m.message_id, reply_markup=keyboard, parse_mode='HTML')
         return
@@ -2927,7 +3107,7 @@ def callback_inline(call):
         button = types.InlineKeyboardButton(text='До меню держслужбовця', callback_data=get_employer(u.id)[2])
         keyboard.add(button)
         bot.edit_message_text(
-            f'<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a> звільнений з сану {emp_name}.',
+            f'{user_link(passport[1], passport[2], passport[3])} звільнений з сану {emp_name}.',
             message_id=call.message.message_id,
             chat_id=call.message.chat.id, parse_mode='HTML', reply_markup=keyboard)
         bill = 0
@@ -2949,14 +3129,14 @@ def callback_inline(call):
         passport[11] = bill
         insert_passport_a(passport)
         insert_user_a(user)
-        out = f'<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>\n{old_san} ⟹ {passport[8]}'
+        out = f'{user_link(passport[1], passport[2], passport[3])}\n{old_san} ⟹ {passport[8]}'
         # bot.send_message(-1001268255961, out, parse_mode='HTML')
         inst = get_institution('Жандармерія')
         head = get_passport(inst[6])
         out = doc.replace('/link/', inst[5]).replace('/num/', str(inst[4] + 1)).replace(
-            '/date/', datetime.now().date().strftime("%d.%m.%Y")).\
-            replace('/head_link/', f'<a href="tg://user?id={head[1]}">{head[2]} {head[3]}</a>').replace(
-            '/del_emp_acc_link/', f'<a href="tg://user?id={passport[1]}">{passport[16]} {passport[17]}</a>')
+            '/date/', datetime.now().date().strftime("%d.%m.%Y")). \
+            replace('/head_link/', f'{user_link(head[1], head[2], head[3])}').replace(
+            '/del_emp_acc_link/', f'{user_link(passport[1], passport[16], passport[17])}')
         bot.send_message(-1001124854070, out, parse_mode='HTML')
 
         all_emps = get_all_employers()
@@ -2988,7 +3168,7 @@ def callback_inline(call):
             keyboard = menu_footer(types.InlineKeyboardMarkup(), 'Протектор')
             bot.send_message(m.chat.id, get_str_passport(m.text), parse_mode='HTML', reply_markup=keyboard)
 
-        bot.register_next_step_handler(call.message, new_emp_id)
+        register_next_step_handler(call.message, new_emp_id)
         return
 
     if call.data == 'acc_check':
@@ -3006,7 +3186,7 @@ def callback_inline(call):
             keyboard = menu_footer(types.InlineKeyboardMarkup(), 'Протектор')
             bot.send_message(m.chat.id, get_str_acc(m.text), parse_mode='HTML', reply_markup=keyboard)
 
-        bot.register_next_step_handler(call.message, new_emp_id)
+        register_next_step_handler(call.message, new_emp_id)
         return
 
     if spl_data[0] == 'zvit':
@@ -3043,13 +3223,13 @@ def callback_inline(call):
                 loc_per_len = len(str(i[4]))
                 white1 = ' ' * (name_len - loc_name_len)
                 white2 = ' ' * (per_len - loc_per_len)
-                msg_out += f'<code><a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>' \
+                msg_out += f'<code>{user_link(passport[1], passport[2], passport[3])}' \
                            f'{white1} {white2}{i[4]}</code>\n'
             passport = get_passport(m.from_user.id)
 
             if m.text != 'Без коментарів':
                 msg_out += f'\nКоментар:\n{m.text}\n'
-            msg_out += f'\nПідписано:\n<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>'
+            msg_out += f'\nПідписано:\n{user_link(passport[1], passport[2], passport[3])}'
             message = bot.send_message(-1001511247539, msg_out, parse_mode='HTML')
             msg_out = f'Звіт про діяльність {inst[2]} за період {inst[7]}-{datetime.now().date().strftime("%d.%m.%Y")}'
             n = bot.send_message(-1001543732225, msg_out, parse_mode='HTML').message_id
@@ -3069,7 +3249,7 @@ def callback_inline(call):
             inst[7] = f'{datetime.now().date().strftime("%d.%m.%Y")}'
             insert_institution_a(inst)
 
-        bot.register_next_step_handler(m, zvit_done)
+        register_next_step_handler(m, zvit_done)
         return
 
     if spl_data[0] == 'finance' and spl_data[1] == 'zvit':
@@ -3088,16 +3268,16 @@ def callback_inline(call):
                 return
             if not m.text.isdigit():
                 m = bot.send_message(m.chat.id, f'Неправильний формат повідомлення. Спробуйте знову. {stop_text}')
-                bot.register_next_step_handler(m, get_am_of_money)
+                register_next_step_handler(m, get_am_of_money)
                 return
             am = int(m.text)
             if am == 0:
                 m = bot.send_message(m.chat.id, f'Кількість ячок не може бути нульовою. Спробуйте знову. {stop_text}')
-                bot.register_next_step_handler(m, get_am_of_money)
+                register_next_step_handler(m, get_am_of_money)
                 return
             if am > 1000000:
                 m = bot.send_message(m.chat.id, f'Введене завелике число ячок. Спробуйте знову. {stop_text}')
-                bot.register_next_step_handler(m, get_am_of_money)
+                register_next_step_handler(m, get_am_of_money)
                 return
 
             def get_comment(m):
@@ -3108,14 +3288,14 @@ def callback_inline(call):
                     return
                 if len(m.text) > 2000:
                     m = bot.send_message(m.chat.id, f'Занадто довгий текст коментаря, спробуйте ще раз. {stop_text}')
-                    bot.register_next_step_handler(m, get_comment)
+                    register_next_step_handler(m, get_comment)
                     return
                 ln = '\n'
                 msg_out = f'Звіт про нарахування коштів на підставах звіту ' \
                           f'{" ".join(zvit_text.split(ln)[0].split()[1:])}\n'
                 msg_out += f'\nСума нарахування: {am} {glas(am)}\n'
                 msg_out += f'\nКоментар:\n{m.text}\n'
-                msg_out += f'\nПідписано:\n<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>'
+                msg_out += f'\nПідписано:\n{user_link(passport[1], passport[2], passport[3])}'
                 m = bot.send_message(-1001511247539, msg_out, parse_mode='HTML')
                 msg_out = f'{zvit_text}\n\nЗвіт про нарахування коштів на підставах звіту ' \
                           f'{" ".join(zvit_text.split()[1:-3])}\n' \
@@ -3129,8 +3309,7 @@ def callback_inline(call):
                                                             f'{spl_data[2]}_{m.id}'))
                 bot.edit_message_text(text=msg_out, chat_id=-1001543732225, message_id=spl_data[2],
                                       reply_markup=keyboard, parse_mode='HTML')
-                inst = get_institution(acc_to_name[" ".join(zvit_text.split()[3:-3])])
-                print(inst)
+                inst = get_institution(inst_shorts[" ".join(zvit_text.split()[3:-3])])
                 try:
                     keyboard = types.InlineKeyboardMarkup()
                     button = types.InlineKeyboardButton(text='Переглянути фінансовий звіт',
@@ -3150,21 +3329,1086 @@ def callback_inline(call):
                 bot.send_message(u.id,
                                  f'<a href="https://t.me/c/1543732225/{spl_data[2]}">Звіт опубліковано</a>. Ви можете '
                                  f'повернутись до головного меню', reply_markup=keyboard, parse_mode='HTML')
+                inst[3] += am
+                insert_institution_a(inst)
 
             m = bot.send_message(m.chat.id,
                                  f"Напишіть коментар (обов'язково)\n{stop_text}",
                                  parse_mode='HTML')
-            bot.register_next_step_handler(m, get_comment)
+            register_next_step_handler(m, get_comment)
 
         m = bot.send_message(m.chat.id, f'Введіть кількість ячок, які ви хочете нарахувати на рахунок установи. '
                                         f'{stop_text}', parse_mode='HTML')
-        bot.register_next_step_handler(m, get_am_of_money)
+        register_next_step_handler(m, get_am_of_money)
         return
 
     if spl_data[0] == 'finzvit':
         bot.edit_message_reply_markup(m.chat.id, m.message_id, reply_markup=None)
-        msg_out = ''
-        bot.send_message(m.chat.id, '')
+        m_id = spl_data[3]
+        bot.copy_message(m.chat.id, -1001511247539, int(m_id))
+        mess_id = int(spl_data[1])
+        msg = bot.forward_message(thrash, -1001543732225, mess_id)
+        zvit_text = msg.text
+        inst = get_institution(inst_shorts[" ".join(zvit_text.split('\n')[0].split()[3:-3])])
+        if inst[1] == 'Жандармерія':
+            emp_name = 'Жандармами'
+            emp_name_1 = 'Жандармів'
+            emp_name_2 = 'Жандарма'
+        elif inst[1] == 'Графство':
+            emp_name = 'Віконтами'
+            emp_name_1 = 'Віконтів'
+            emp_name_2 = 'Віконта'
+        elif inst[1] == 'Державний Банк':
+            emp_name = 'Карбами'
+            emp_name_1 = 'Карбів'
+            emp_name_2 = 'Карба'
+        else:
+            return
+
+        msg_out = 'Згідно зі звітами про діяльність та нарахування коштів здійсніть розподіл отриманих коштів між ' \
+                  f'{emp_name} {inst[2]}\nСписок працівників:\n\n'
+        get_employers, insert_emp_l, insert_all_employers_g = get_inst_func(inst[1])[:3]
+        emps = get_employers()
+        for i in emps:
+            passport = get_passport(i[1])
+            msg_out += f'{user_link(passport[1], passport[2], passport[3])}\n'
+        msg_out += f'\nВведіть кількість ячок, яку ви хочете нарахувати кожному із {emp_name_1} строго у тому ж ' \
+                   f'порядку, що і в цьому повіломленні. Для кожного {emp_name_2} — з нового рядка. Приклад.'
+        m = bot.send_message(m.chat.id, msg_out, parse_mode='HTML')
+
+        def get_msg(m):
+            if m.text == 'СТОП':
+                bot.send_message(m.chat.id, 'Ви відмінили процедуру розподілу коштів')
+                main_menu(m, False)
+                return
+
+            spl_text = m.text.split('\n')
+            moneys_list = []
+            for i in spl_text:
+                if i.isdigit():
+                    moneys_list.append(int(i))
+                else:
+                    bot.send_message(m.chat.id, 'Неправильний формат повідомлення')
+                    register_next_step_handler(m, get_msg)
+                    return
+
+            if len(moneys_list) != len(emps):
+                bot.send_message(m.chat.id, f'Кількість рядків має бути рівною кількості {emp_name_2}')
+                register_next_step_handler(m, get_msg)
+                return
+
+            m = bot.send_message(m.chat.id, 'Напишіть коментар до звіту.')
+
+            def get_comm(m):
+                nonlocal emps
+                if m.text == 'СТОП':
+                    bot.send_message(m.chat.id, 'Ви відмінили процедуру розподілу коштів')
+                    main_menu(m, False)
+                    return
+                m_id = int(spl_data[1])
+                msg = bot.forward_message(thrash, -1001543732225, m_id)
+                zvit_text = msg.text
+                passport = get_passport(m.from_user.id)
+
+                ln = '\n'
+                msg_out = f'Звіт про розподіл коштів на підставах звіту про нарахування коштів за ' \
+                          f'{zvit_text.split(ln)[3].split(" ")[1]}\n\n'
+
+                all_employers_sorted = sorted(emps,
+                                              key=lambda x: len(get_passport(x[1])[2] + get_passport(x[1])[3]),
+                                              reverse=True)
+                for i in emps:
+                    i.append(moneys_list[i[0] - 1])
+                name_len = len(
+                    get_passport(all_employers_sorted[0][1])[2] + get_passport(all_employers_sorted[0][1])[3])
+                all_employers_sorted = sorted(emps, key=lambda x: x[-1], reverse=True)
+                per_len = len(str(all_employers_sorted[0][-1]))
+                for i in emps:
+                    passport = get_passport(i[1])
+                    loc_name_len = len(passport[2] + passport[3])
+                    loc_per_len = len(str(i[4]))
+                    white1 = ' ' * (name_len - loc_name_len)
+                    white2 = ' ' * (per_len - loc_per_len)
+                    msg_out += f'<code>{user_link(passport[1], passport[2], passport[3])}' \
+                               f'{white1} {white2}{i[4]}</code>\n'
+
+                passport = get_passport(m.from_user.id)
+                msg_out += f'\nКоментар:\n{m.text}\n'
+                msg_out += f'\nПідписано:\n{user_link(passport[1], passport[2], passport[3])}'
+                m = bot.send_message(-1001511247539, msg_out, parse_mode='HTML')
+                msg_out = f'{zvit_text}\n\nЗвіт про розподіл коштів на підставах звіту про нарахування коштів за ' \
+                          f'{zvit_text.split(ln)[3].split(" ")[1]}\n' \
+                          f'Опубліковано {datetime.now().date().strftime("%d.%m.%Y")}'
+                keyboard = types.InlineKeyboardMarkup()
+                keyboard.add(types.InlineKeyboardButton(text='Переглянути звіт про діяльність',
+                                                        url=f't.me/yachminiya_test_bot?start=zvitd_'
+                                                            f'{spl_data[1]}_{spl_data[3]}'))
+                keyboard.add(types.InlineKeyboardButton(text='Переглянути звіт про нарахування коштів',
+                                                        url=f't.me/yachminiya_test_bot?start=finzvitd_'
+                                                            f'{spl_data[1]}_{spl_data[2]}'))
+                keyboard.add(types.InlineKeyboardButton(text='Переглянути звіт про розподіл коштів',
+                                                        url=f't.me/yachminiya_test_bot?start=rozp_'
+                                                            f'{spl_data[1]}_{m.id}'))
+                bot.edit_message_text(text=msg_out, chat_id=-1001543732225, message_id=spl_data[1],
+                                      reply_markup=keyboard, parse_mode='HTML')
+
+                '''
+                all_passports = get_all_passports()
+                for i in range(len(emps)):
+                    passport = get_passport(emps[i][1])
+                    passport[9] += moneys_list[i]
+                    insert_passport_l(passport)
+                    all_passports[passport[0] - 1][9] += moneys_list[i]
+                insert_all_passports_g(all_passports)'''
+
+            register_next_step_handler(m, get_comm)
+
+        register_next_step_handler(m, get_msg)
+        return
+
+    if call.data == 'prostir_menu':
+        prostir_menu_f(u, m)
+        return
+
+    if spl_data[0] == 'private' and spl_data[1] in ('chats', 'channels'):
+        if spl_data[1] == 'chats':
+            all_ch = get_all_chats()
+            adnum = 13
+            str_in0 = 'chat'
+            str_in1 = 'чатів'
+            str_in2 = 'чати'
+            str_in3 = ". Чат з'явиться тут, і ви зможете адмініструвати його."
+        else:
+            all_ch = get_all_channels()
+            adnum = 7
+            str_in0 = 'channel'
+            str_in1 = 'каналів'
+            str_in2 = 'канали'
+            str_in3 = " і напишіть будь-яке повідомлення у каналі. " \
+                      "Канал з'явиться тут, і ви зможете адмініструвати його."
+        keyboard = types.InlineKeyboardMarkup()
+        buttons = []
+        for i in all_ch:
+            if str(call.from_user.id) in i[adnum].split():
+                but = types.InlineKeyboardButton(i[2], callback_data=f'private_{str_in0}_{i[1]}')
+                buttons.append(but)
+        n = int(spl_data[2])
+        ln = 5 + n * 5
+        zero = False
+        more = True
+        if len(buttons) == 0:
+            zero = True
+        elif len(buttons) <= ln:
+            more = False
+            ln = len(buttons)
+
+        if zero:
+            msg_text = f'У вас нема приватних {str_in1}. Додайте бота у якийсь зі своїх {str_in1}{str_in3}'
+            keyboard = menu_footer(keyboard, "prostir_menu")
+            bot.edit_message_text(msg_text, m.chat.id, m.message_id, reply_markup=keyboard, parse_mode='HTML')
+            return
+        if more:
+            for i in range(n * 5, ln):
+                keyboard.keyboard.append([buttons[i]])
+            if n:
+                but0 = types.InlineKeyboardButton('◀️', callback_data=f'private_{str_in0}s_{n - 1}')
+            else:
+                but0 = types.InlineKeyboardButton('⏺', callback_data=f'empty')
+            but1 = types.InlineKeyboardButton('▶️', callback_data=f'private_{str_in0}s_{n + 1}')
+            keyboard.keyboard.append([but0, but1])
+            msg_text = f'Ваші приватні {str_in2}. [{1 + n * 5}-{ln}]'
+        else:
+            for i in range(n * 5, ln):
+                keyboard.keyboard.append([buttons[i]])
+            if n:
+                but0 = types.InlineKeyboardButton('◀️', callback_data=f'private_{str_in0}s_{n - 1}')
+            else:
+                but0 = types.InlineKeyboardButton('⏺', callback_data=f'empty')
+            but1 = types.InlineKeyboardButton('⏺', callback_data=f'empty')
+            keyboard.keyboard.append([but0, but1])
+            msg_text = f'Список ваших приватних {str_in1}. [{1 + n * 5}-{ln}]'
+
+        keyboard = menu_footer(keyboard, "prostir_menu")
+        bot.edit_message_text(msg_text, m.chat.id, m.message_id, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+    if call.data == 'empty':
+        bot.answer_callback_query(call.id, text='Ця кнопка не виконує дій, окрім показу цього повідомлення. '
+                                                'Не натискай її, будь ласка.', show_alert=True)
+        return
+
+    if call.data == 'in_development':
+        bot.answer_callback_query(call.id, text='Якщо ви бачите це повідомлення, функція яку ви хочете використати ще '
+                                                'не готова, і наразі проводиться її розробка.', show_alert=True)
+        return
+
+    if spl_data[0] == 'private' and spl_data[1] in ('chat', 'channel') and len(spl_data) < 4:
+        if spl_data[1] == 'chat':
+            check = True
+            ch = get_chat(int(spl_data[2]))
+            is_on = 8
+            ch_name = 'chat'
+            ch_name1 = 'чаті'
+            own = 7
+            linked = 14
+            link = 4
+            ch_name2 = 'каналу'
+            ch_name3 = 'Чат'
+        else:
+            check = False
+            ch = get_channel(int(spl_data[2]))
+            is_on = 6
+            ch_name = 'channel'
+            ch_name1 = 'каналі'
+            own = 5
+            linked = 8
+            link = 3
+            ch_name2 = 'чату'
+            ch_name3 = 'Канал'
+
+        keyboard = types.InlineKeyboardMarkup()
+
+        if ch[is_on]:
+            status = 'Ввімкнений'
+        else:
+            status = 'Ввимкнений'
+
+        if ch[own] == call.from_user.id:
+            if ch[is_on]:
+                keyboard.add(types.InlineKeyboardButton(f'Вимкнути бота в {ch_name1}',
+                                                        callback_data=f'{ch_name}_turn_off_{spl_data[2]}'))
+            else:
+                keyboard.add(types.InlineKeyboardButton(f'Ввімкнути бота в {ch_name1}',
+                                                        callback_data=f'{ch_name}_turn_on_{spl_data[2]}'))
+
+            keyboard.add(types.InlineKeyboardButton(f'Адміністратори', callback_data=f'{ch_name}_admins_{spl_data[2]}'))
+
+            keyboard.add(types.InlineKeyboardButton(f"Прив'язка до {ch_name2}",
+                                                    callback_data=f'{ch_name}_linking_{spl_data[2]}'))
+
+            keyboard.add(types.InlineKeyboardButton(f'Керування посиланням та доступом до Простору Ячмінії',
+                                                    callback_data=f'{ch_name}_prostir_{spl_data[2]}'))
+
+            if check:
+                keyboard.add(types.InlineKeyboardButton(f"▶️ Наступна сторінка",
+                                                        callback_data=f'{call.data}_next'))
+            else:
+                keyboard.add(types.InlineKeyboardButton(f"Опублікувати пост з реакціями",
+                                                        callback_data=f'channel_post_{spl_data[2]}'))
+        else:
+            if check:
+                keyboard.add(
+                    types.InlineKeyboardButton(f'Тригери репутації',
+                                               callback_data='in_development')) # f'{ch_name}_reptrig_{spl_data[2]}'
+                keyboard.add(
+                    types.InlineKeyboardButton(f'Тригери повідомлень',
+                                               callback_data=f'{ch_name}_messtrig_{spl_data[2]}'))
+                keyboard.add(
+                    types.InlineKeyboardButton(f'Привітальне повідомлення',
+                                               callback_data=f'{ch_name}_welcmess_{spl_data[2]}'))
+            else:
+                keyboard.add(types.InlineKeyboardButton(f"Опублікувати пост з реакціями",
+                                                        callback_data=f'channel_post_{spl_data[2]}'))
+
+        if ch[linked]:
+            linked = f"Прив'язаний до {ch_name2}"
+        else:
+            linked = f"Не прив'язаний до {ch_name2}"
+
+        keyboard = menu_footer(keyboard, f'private_{spl_data[1]}s_0')
+        bot.edit_message_text(f'{ch_name3} {ch[2]}\nСтатус: {status}\n{linked}', message_id=m.message_id,
+                              chat_id=m.chat.id, reply_markup=keyboard)
+        return
+
+    if spl_data[0] == 'private' and spl_data[1] in ('chat', 'channel') and spl_data[3] == 'next':
+        if spl_data[1] == 'chat':
+            check = True
+            ch = get_chat(int(spl_data[2]))
+            is_on = 8
+            ch_name = 'chat'
+            ch_name1 = 'чаті'
+            own = 7
+            linked = 14
+            link = 4
+            ch_name2 = 'каналу'
+            ch_name3 = 'Чат'
+        else:
+            check = False
+            ch = get_channel(int(spl_data[2]))
+            is_on = 6
+            ch_name = 'channel'
+            ch_name1 = 'каналі'
+            own = 5
+            linked = 8
+            link = 3
+            ch_name2 = 'чату'
+            ch_name3 = 'Канал'
+        keyboard = types.InlineKeyboardMarkup()
+        if check:
+            keyboard.add(
+                types.InlineKeyboardButton(f'Тригери репутації',
+                                           callback_data='in_development')) # f'{ch_name}_reptrig_{spl_data[2]}'
+            keyboard.add(
+                types.InlineKeyboardButton(f'Тригери повідомлень', callback_data=f'{ch_name}_messtrig_0_{spl_data[2]}'))
+            keyboard.add(
+                types.InlineKeyboardButton(f'Привітальне повідомлення',
+                                           callback_data=f'{ch_name}_welcmess_{spl_data[2]}'))
+            keyboard.add(types.InlineKeyboardButton(f"◀️ Попередня сторінка",
+                                                    callback_data=f'{"_".join(spl_data[:-1])}'))
+
+        if ch[is_on]:
+            status = 'Ввімкнений'
+        else:
+            status = 'Ввимкнений'
+        if ch[linked]:
+            linked = f"Прив'язаний до {ch_name2}"
+        else:
+            linked = f"Не прив'язаний до {ch_name2}"
+        keyboard = menu_footer(keyboard, 'private_chats_0')
+        bot.edit_message_text(f'{ch_name3} {ch[2]}\nСтатус: {status}\n{linked}', m.chat.id, m.message_id,
+                              reply_markup=keyboard)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'turn' and spl_data[2] in ('on', 'off') and \
+            len(spl_data) == 4:
+        if spl_data[2] == 'on':
+            keyboard = types.InlineKeyboardMarkup()
+            passport = get_passport(u.id)
+            day = datetime.today().weekday()
+            pay = 5 * (7 - day)
+            text = f'Для ввімкнення бота ви маєте сплатити {pay} {glas(pay)}' \
+                   f' за цей тиждень (5 ячок за кожен день). Надалі ви сплачуватимете по 35 ячок на тиждень.\n' \
+                   f'На вашому рахунку {passport[9]} {glas(passport[9])}.'
+            keyboard.add(types.InlineKeyboardButton(text=f'Сплатити {pay} {glas(pay)}',
+                                                    callback_data=f'{call.data}_done'))
+            keyboard = menu_footer(keyboard, f'private_{spl_data[0]}_{spl_data[3]}')
+            bot.edit_message_text(chat_id=m.chat.id, message_id=m.message_id, text=text,
+                                  reply_markup=keyboard)
+        else:
+            keyboard = types.InlineKeyboardMarkup()
+            day = datetime.today().weekday()
+            pay = 5 * (7 - day)
+            text = f'Ви точно хочете вимкнути бота? Ви втратите {pay} {glas(pay)}, які сплачені' \
+                   f' за цей тиждень (5 ячок за кожен день).'
+            keyboard.add(types.InlineKeyboardButton(text=f'Вимкнути бота',
+                                                    callback_data=f'{call.data}_done'))
+            keyboard = menu_footer(keyboard, f'private_{spl_data[0]}_{spl_data[3]}')
+            bot.edit_message_text(chat_id=m.chat.id, message_id=m.message_id, text=text,
+                                  reply_markup=keyboard)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'turn' and spl_data[2] in ('on', 'off') and \
+            spl_data[4] == 'done':
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[3]))
+            is_on = 8
+            linked = 14
+            ch_f = insert_chat_a
+            ch_name = 'чаті'
+            ch_name1 = 'каналу'
+        else:
+            ch = get_channel(int(spl_data[3]))
+            is_on = 6
+            linked = 8
+            ch_f = insert_channel_a
+            ch_name = 'каналі'
+            ch_name1 = 'чату'
+
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard = menu_footer(keyboard, f'private_{spl_data[0]}_{spl_data[3]}', '⬅️ До чату')
+        passport = get_passport(u.id)
+        if spl_data[2] == 'on':
+            if ch[linked]:
+                keyboard.add(types.InlineKeyboardButton(text=f"Відв'язати {ch_name[-1]}",
+                                                        callback_data=f'{spl_data[0]}_unlink_{spl_data[3]}'))
+                keyboard = menu_footer(keyboard, f'private_{spl_data[0]}_{spl_data[3]}', '⬅️ До чату')
+                text = f"Для вимкнення бота в {ch_name} треба його відв'язати від {ch_name1}. Зробити це можна за " \
+                       f"кнопкою нижче"
+                bot.edit_message_text(chat_id=m.chat.id, message_id=m.message_id, text=text,
+                                      reply_markup=keyboard)
+                return
+
+            day = datetime.today().weekday()
+            pay = 5 * (7 - day)
+            if passport[9] < pay:
+                text = 'На вашому рахунку недостатньо ячок.'
+                bot.edit_message_text(chat_id=m.chat.id, message_id=m.message_id, text=text,
+                                      reply_markup=keyboard)
+                return
+            passport[9] -= pay
+            ch[is_on] = 1
+            text = f'Бот тепер працює в {ch_name} {ch[2]}.'
+            bot.edit_message_text(chat_id=m.chat.id, message_id=m.message_id, text=text,
+                                  reply_markup=keyboard)
+        else:
+            ch[is_on] = 0
+            text = f'Бот більше не працює в {ch_name} {ch[2]}.'
+            bot.edit_message_text(chat_id=m.chat.id, message_id=m.message_id, text=text,
+                                  reply_markup=keyboard)
+        insert_passport_a(passport)
+        ch_f(ch)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'admins':
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[2]))
+            link = 13
+            ch_name = 'чату'
+        else:
+            ch = get_channel(int(spl_data[2]))
+            link = 7
+            ch_name = 'каналу'
+        keyboard = types.InlineKeyboardMarkup()
+        admins = ch[link].split()[2:]
+        for i in admins:
+            if int(i) == u.id:
+                continue
+            user_admin = get_user(int(i))
+            keyboard.add(types.InlineKeyboardButton(text=user_admin[2],
+                                                    callback_data=f'{spl_data[0]}_admin_{i}_{spl_data[2]}'))
+        keyboard.add(types.InlineKeyboardButton(text='Додати адміністратора',
+                                                callback_data=f'{spl_data[0]}_add_admin_{spl_data[2]}'))
+        keyboard = menu_footer(keyboard, f'private_{spl_data[0]}_{spl_data[2]}')
+        bot.edit_message_text(text=f'Список адміністраторів {ch_name} {ch[2]}', chat_id=m.chat.id,
+                              message_id=m.message_id, reply_markup=keyboard)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'admin':
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[3]))
+            ch_name = 'чату'
+        else:
+            ch = get_channel(int(spl_data[3]))
+            ch_name = 'каналу'
+        keyboard = types.InlineKeyboardMarkup()
+        user = get_user(int(spl_data[2]))
+        passport = get_passport(int(spl_data[2]))
+        if not passport:
+            keyboard = menu_footer(keyboard, f'private_{spl_data[0]}_{spl_data[3]}', '⬅️ До чату')
+            bot.edit_message_text(text='')
+        keyboard.add(types.InlineKeyboardButton(text='Передати право власника (в боті)',
+                                                callback_data=f'{spl_data[0]}_give_creator_{spl_data[2]}_{spl_data[3]}'))
+        keyboard.add(types.InlineKeyboardButton(text='Вилучити адміністратора',
+                                                callback_data=f'{spl_data[0]}_del_admin_{spl_data[2]}_{spl_data[3]}'))
+
+        keyboard = menu_footer(keyboard, f'{spl_data[0]}_admins_{spl_data[3]}')
+        bot.edit_message_text(text=f'Адміністратор {ch_name} {ch[2]}\n{user[2]}', chat_id=m.chat.id,
+                              message_id=m.message_id, reply_markup=keyboard)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'give' and spl_data[2] == 'creator':
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[4]))
+            ch_name = 'чату'
+            chl = get_channel(ch[14])
+            ch_name1 = 'чат'
+            ch_name2 = 'каналу'
+        else:
+            ch = get_channel(int(spl_data[4]))
+            ch_name = 'каналу'
+            chl = get_chat(ch[18])
+            ch_name1 = 'канал'
+            ch_name2 = 'чату'
+        if chl:
+            text_in = f'''\n\nУВАГА!\nТак як {ch_name1} "{ch[2]}" прив'язаний до {ch_name2} "{chl[2]}", ви передасте 
+            право власника на канал і чат.'''
+        else:
+            text_in = ''
+        user = get_user(int(spl_data[3]))
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(types.InlineKeyboardButton(text='Передати право власника',
+                                                callback_data=f'{spl_data[0]}_give_'
+                                                              f'creatordone_{spl_data[3]}_{spl_data[4]}'))
+        keyboard = menu_footer(keyboard, f'{spl_data[0]}_admins_{spl_data[4]}')
+        bot.edit_message_text(text=f'Ви точно хочете передати право власника {ch_name} акаунту {user[2]}? Це '
+                                   f'незворотня дія.{text_in}',
+                              chat_id=m.chat.id, message_id=m.message_id, reply_markup=keyboard)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'give' and spl_data[2] == 'creatordone':
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[4]))
+            chl = get_channel(ch[14])
+            own = 7
+            ownl = 5
+            ch_f = insert_chat_a
+            ch_name = 'чату'
+            chl_f = insert_channel_a
+            ch_name1 = 'чат'
+            ch_name2 = 'каналу'
+        else:
+            ch = get_channel(int(spl_data[4]))
+            chl = get_chat(ch[18])
+            own = 5
+            ownl = 7
+            ch_f = insert_channel_a
+            ch_name = 'каналу'
+            chl_f = insert_chat_a
+            ch_name1 = 'канал'
+            ch_name2 = 'чату'
+        ch[own] = int(spl_data[3])
+        ch_f(ch)
+        if chl:
+            chl[ownl] = int(spl_data[3])
+            chl_f(chl)
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard = menu_footer(keyboard, f'private_{spl_data[0]}_{spl_data[4]}', f'⬅️ До {ch_name}')
+        bot.edit_message_text(text=f'Права власника передані.', chat_id=m.chat.id, message_id=m.message_id,
+                              reply_markup=keyboard)
+        try:
+            bot.send_message(int(spl_data[3]), f'Вам передали право власника {ch_name} "{ch[2]}"')
+        except:
+            pass
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'del' and spl_data[2] == 'admin':
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[4]))
+            ch_f = insert_chat_a
+            adm = 13
+            ch_name = 'чату'
+        else:
+            ch = get_channel(int(spl_data[4]))
+            ch_f = insert_channel_a
+            adm = 7
+            ch_name = 'каналу'
+        adm_list = ch[adm].split()
+        adm_list.remove(spl_data[3])
+        ch[adm] = ' '.join(adm_list)
+        ch_f(ch)
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard = menu_footer(keyboard, f'private_{spl_data[0]}_{spl_data[4]}', f'⬅️ До {ch_name}')
+        bot.edit_message_text(text=f'Адміністратор вилучений', chat_id=m.chat.id, message_id=m.message_id,
+                              reply_markup=keyboard)
+        try:
+            bot.send_message(int(spl_data[3]), f'Вас вилучили з адміністраторів {ch_name} "{ch[2]}"')
+        except:
+            pass
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'add' and spl_data[2] == 'admin':
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[3]))
+            link = 13
+            ch_f = insert_chat_a
+            ch_name = 'чату'
+        else:
+            ch = get_channel(int(spl_data[3]))
+            link = 7
+            ch_f = insert_channel_a
+            ch_name = 'каналу'
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard = menu_footer(keyboard, f'{spl_data[0]}_admins_{spl_data[3]}')
+        bot.edit_message_text(text=f'Введіть id акаунта, яку ви хочете зробити адміністратором. '
+                                     f'<a href="https://telegra.ph/YAk-d%D1%96znatis-id-akaunta-v-Telegram%D1%96-03-12">'
+                                     f'Як дізнатись id акаунта в Телеграмі?</a>\n{stop_text}.',
+                                     chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                     parse_mode='HTML')
+
+        def add_adm(message):
+            """ms = bot.forward_message(thrash, m.chat.id, m.message_id)
+            if mess.text != ms.text:
+                return
+            bot.send_message(message.chat.id, 'лмао')"""
+            if message.text == 'СТОП':
+                bot.send_message(m.chat.id, 'Ви відмінили процедуру додавання адміністратора.', reply_markup=keyboard)
+                return
+
+            if not message.text.isdigit():
+                bot.send_message(message.chat.id, 'Вказаний неправильний ідентифікатор акаунта.', reply_markup=keyboard)
+                return
+
+            user = get_user(int(message.text))
+
+            if not user:
+                bot.send_message(message.chat.id, 'Акаунт не зареєстрований у боті. Попросіть у особи, хай вона'
+                                                  ' розпочне бесіду з ботом.', reply_markup=keyboard)
+                return
+
+            ch[link] = f'{ch[link]} {message.text}'
+            ch_f(ch)
+
+            try:
+                bot.send_message(message.text, f'{user_link(message.from_user.id, html(name(message.from_user)))} '
+                                               f'призначив вас адміністратором {ch_name} "{html(ch[2])}". '
+                                               f'Тепер ви можете керувати ним через меню керування Простором Ячмінії.',
+                                 parse_mode='HTML')
+            except:
+                pass
+
+            bot.send_message(message.chat.id, f'{user_link(user[1], html(user[2]))} став '
+                                              f'адміністратором {ch_name} "{html(ch[2])}"', parse_mode='HTML',
+                             reply_markup=keyboard)
+
+        register_next_step_handler(m, add_adm)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'linking':
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[2]))
+            link = 14
+            ch_f = get_channel
+            ch_name0 = 'Чат'
+            ch_name1 = 'каналу'
+        else:
+            ch = get_channel(int(spl_data[2]))
+            link = 8
+            ch_f = get_chat
+            ch_name0 = 'Канал'
+            ch_name1 = 'чату'
+
+        keyboard = types.InlineKeyboardMarkup()
+        if ch[link]:
+            ch_l = ch_f(ch[link])
+            keyboard.add(types.InlineKeyboardButton(text="Відв'язати",
+                                                    callback_data=f'{spl_data[0]}_unlink_{spl_data[2]}'))
+            text = f'''{ch_name0} "{ch[2]}" прив'язаний до {ch_name1} "{ch_l[2]}".'''
+        else:
+            keyboard.add(types.InlineKeyboardButton(text="Прив'язати",
+                                                    callback_data=f'{spl_data[0]}_link_{spl_data[2]}'))
+            text = f'''{ch_name0} не прив'язаний до {ch_name1}.'''
+
+        keyboard = menu_footer(keyboard, f'private_{spl_data[0]}_{spl_data[2]}')
+        bot.edit_message_text(text=text, chat_id=m.chat.id, message_id=m.message_id, reply_markup=keyboard)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'unlink':
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[2]))
+            ch_l = get_channel(ch[14])
+            ch_name0 = 'чат'
+            ch_name1 = 'каналу'
+        else:
+            ch = get_channel(int(spl_data[2]))
+            ch_l = get_chat(ch[8])
+            ch_name0 = 'канал'
+            ch_name1 = 'чату'
+
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(types.InlineKeyboardButton(text="Відв'язати",
+                                                callback_data=f'{spl_data[0]}_unlinkdone_{spl_data[2]}'))
+        text = f'''Ви точно хочете відв'язати {ch_name0} "{ch[2]}" від {ch_name1} "{ch_l[2]}"? 
+        Ви втратите чимало переваг.'''
+        keyboard = menu_footer(keyboard, f'{spl_data[0]}_linking_{spl_data[2]}')
+        bot.edit_message_text(text=text, chat_id=m.chat.id, message_id=m.message_id, reply_markup=keyboard)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'unlinkdone':
+        if spl_data[0] == 'chat':
+            chat = get_chat(int(spl_data[2]))
+            channel = get_channel(chat[14])
+            ch_name0 = 'чат'
+            ch_name1 = 'каналу'
+        else:
+            channel = get_channel(int(spl_data[2]))
+            chat = get_chat(channel[8])
+            ch_name0 = 'канал'
+            ch_name1 = 'чату'
+
+        chat[14] = 0
+        channel[8] = 0
+        insert_chat_a(chat)
+        insert_channel_a(channel)
+        text = f'''Ви відв'язали {ch_name0} від {ch_name1}.'''
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard = menu_footer(keyboard, f'private_{spl_data[0]}_{spl_data[2]}', '⬅️ До чату')
+        bot.edit_message_text(text=text, chat_id=m.chat.id, message_id=m.message_id, reply_markup=keyboard)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'link':
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[2]))
+            chs = get_all_channels(u.id)
+            ch_name0 = 'чату'
+            ch_name1 = 'канал'
+        else:
+            ch = get_channel(int(spl_data[2]))
+            chs = get_all_chats(u.id)
+            ch_name0 = 'каналу'
+            ch_name1 = 'чат'
+        keyboard = types.InlineKeyboardMarkup()
+        for i in chs:
+            keyboard.add(types.InlineKeyboardButton(text=i[2],
+                                                    callback_data=f'{spl_data[0]}_linkdone_{spl_data[2]}_{i[1]}'))
+        keyboard = menu_footer(keyboard, f'{spl_data[0]}_linking_{spl_data[2]}')
+        text = f'''Оберіть {ch_name1}, який ви хочете прив'язати до {ch_name0} "{ch[2]}".'''
+        bot.edit_message_text(text=text, chat_id=m.chat.id, message_id=m.message_id, reply_markup=keyboard)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'linkdone':
+        if spl_data[0] == 'chat':
+            chat = get_chat(int(spl_data[2]))
+            channel = get_channel(int(spl_data[3]))
+            ch_name0 = 'чат'
+            ch_name1 = 'каналу'
+        else:
+            channel = get_channel(int(spl_data[2]))
+            chat = get_chat(int(spl_data[3]))
+            ch_name0 = 'канал'
+            ch_name1 = 'чату'
+
+        chat[14] = channel[1]
+        channel[8] = chat[1]
+        insert_chat_a(chat)
+        insert_channel_a(channel)
+        text = f'''Ви прив'язали {ch_name0} до {ch_name1}.'''
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard = menu_footer(keyboard, f'private_{spl_data[0]}_{spl_data[2]}', '⬅️ До чату')
+        bot.edit_message_text(text=text, chat_id=m.chat.id, message_id=m.message_id, reply_markup=keyboard)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'prostir':
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[2]))
+            link = 4
+            ch_name0 = 'чат'
+            ch_name1 = 'чату'
+        else:
+            ch = get_channel(int(spl_data[2]))
+            link = 3
+            ch_name0 = 'канал'
+            ch_name1 = 'каналу'
+
+        keyboard = types.InlineKeyboardMarkup()
+        if ch[link] == 'NoneURL':
+            text = f"Ви не вказали посилання до {ch_name1}. Вказавши його ви відкриєте {ch_name0} для Простору " \
+                   f"Ячмінії."
+            keyboard.add(types.InlineKeyboardButton(f'Відкрити {ch_name0} для Простору Ячмінії',
+                                                    callback_data=f'{spl_data[0]}_open_{spl_data[2]}'))
+        else:
+            text = f"Посилання на {ch_name0} вказане:\n{ch[link]}\nЯкщо посилання неробоче, ви можете замінити " \
+                   f"його натиснувши на кнопку нижче. Також ви можете відкликати посилання і закрити чат від " \
+                   f"Простору Ячмінії"
+
+            keyboard.add(types.InlineKeyboardButton(f'Редагувати посилання',
+                                                    callback_data=f'{spl_data[0]}_edit_{spl_data[2]}'))
+            keyboard.add(types.InlineKeyboardButton(f'Відкликати посилання і закрити {ch_name0} від Простору Ячмінії',
+                                                    callback_data=f'{spl_data[0]}_close_{spl_data[2]}'))
+        keyboard = menu_footer(keyboard, f'private_{spl_data[0]}_{spl_data[2]}')
+        bot.edit_message_text(text=text, chat_id=m.chat.id, message_id=m.message_id, reply_markup=keyboard)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] in ('open', 'edit'):
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[2]))
+            link = 4
+            ch_name0 = 'чат'
+            ch_name1 = 'чату'
+            ch_in = insert_chat_a
+        else:
+            ch = get_channel(int(spl_data[2]))
+            link = 3
+            ch_name0 = 'канал'
+            ch_name1 = 'каналу'
+            ch_in = insert_channel_a
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard = menu_footer(keyboard, f'{spl_data[0]}_prostir_{spl_data[2]}')
+        if spl_data[1] == 'open':
+            word0 = f'відкриття {ch_name1} для Простору Ячмінії'
+            word1 = f'відкриття {ch_name1}'
+            word2 = f'відкрили {ch_name0} для Простору Ячмінії'
+        else:
+            word0 = f'редагування посилання на {ch_name0}'
+            word1 = f'редагування посилання'
+            word2 = f'відредагували посилання на {ch_name0}'
+
+        text = f'''Для {word0} надішліть посилання на нього. {stop_text}'''
+        bot.edit_message_text(text=text, chat_id=m.chat.id, message_id=m.message_id, parse_mode='HTML')
+
+        def get_link(message):
+            if message.text == 'СТОП':
+                bot.send_message(m.chat.id, f'Ви відмінили процедуру {word1}.', reply_markup=keyboard)
+                return
+            if re.fullmatch(r'(https://|)t\.me/(joinchat/|)\w*', message.text):
+                ch[link] = message.text
+                bot.send_message(m.chat.id, f'Ви успішно {word2}. '
+                                            f'Якщо бот увімкнений та оплачений, то {ch_name0} буде видимий в '
+                                            f'Просторі Ячмінії. Ви завжди можете закрити чат.', reply_markup=keyboard)
+                ch_in(ch)
+            else:
+                bot.send_message(m.chat.id,
+                                 f'Ви надіслали направильне посилання на {ch_name0}. Спробуйте ще раз. {stop_text}.',
+                                 parse_mode='HTML')
+                register_next_step_handler(m, get_link)
+                return
+        register_next_step_handler(m, get_link)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'close':
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[2]))
+            link = 4
+            ch_name0 = 'чат'
+            ch_in = insert_chat_a
+        else:
+            ch = get_channel(int(spl_data[2]))
+            link = 3
+            ch_name0 = 'канал'
+            ch_in = insert_channel_a
+        ch[link] = 'NoneURL'
+        ch_in(ch)
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard = menu_footer(keyboard, f'{spl_data[0]}_prostir_{spl_data[2]}')
+        text = f'''Ви успішно відкликали посилання на {ch_name0}.'''
+        bot.edit_message_text(text=text, chat_id=m.chat.id, message_id=m.message_id, reply_markup=keyboard)
+        return
+
+    if spl_data[0] in ('chat', 'channel') and spl_data[1] == 'reptrig':
+        if spl_data[0] == 'chat':
+            ch = get_chat(int(spl_data[2]))
+            link = 4
+            ch_name0 = 'чат'
+            ch_in = insert_chat_a
+        else:
+            ch = get_channel(int(spl_data[2]))
+            link = 3
+            ch_name0 = 'канал'
+            ch_in = insert_channel_a
+
+        return
+
+    if spl_data[0] == 'chat' and spl_data[1] == 'messtrig':
+        chat = get_chat(int(spl_data[3]))
+        keyboard = types.InlineKeyboardMarkup()
+        if chat[11] == 'None':
+            msg_text = 'Наразі у вашому чаті нема жодного тригеру повідомлення, проте ви можете ' \
+                   'додати його натиснувши на кнопку нижче.'
+            keyboard.add(types.InlineKeyboardButton('🆕 Додати тригер', callback_data=f'chat_addmesstrig_{spl_data[3]}'))
+        else:
+            triggers = chat[11].split('#*%|%*#')
+
+            buttons = []
+            for i in range(len(triggers)):
+                but = types.InlineKeyboardButton(triggers[i], callback_data=f'chat_trigger_{i}_{spl_data[3]}')
+                buttons.append(but)
+            n = int(spl_data[2])
+            ln = 5 + n * 5
+            more = True
+            if len(buttons) <= ln:
+                more = False
+                ln = len(buttons)
+
+            for i in range(n * 5, ln):
+                keyboard.keyboard.append([buttons[i]])
+            keyboard.add(types.InlineKeyboardButton('🆕 Додати тригер', callback_data=f'chat_addmesstrig_{spl_data[3]}'))
+            if n:
+                but0 = types.InlineKeyboardButton('◀️', callback_data=f'chat_messtrig_{n-1}_{spl_data[3]}')
+            else:
+                but0 = types.InlineKeyboardButton('⏺', callback_data=f'empty')
+            if more:
+                but1 = types.InlineKeyboardButton('▶️', callback_data=f'chat_messtrig_{n+1}_{spl_data[3]}')
+            else:
+                but1 = types.InlineKeyboardButton('⏺', callback_data=f'empty')
+            keyboard.keyboard.append([but0, but1])
+
+            msg_text = f'Список тригерів повідомлень вашого чату. [{1 + n * 5}-{ln}]'
+
+        keyboard = menu_footer(keyboard, f"private_chat_{spl_data[3]}_next")
+        bot.edit_message_text(msg_text, m.chat.id, m.message_id, reply_markup=keyboard, parse_mode='HTML')
+        return
+
+    if spl_data[0] == 'chat' and spl_data[1] == 'trigger':
+        chat = get_chat(int(spl_data[3]))
+        keyboard = types.InlineKeyboardMarkup()
+        trigger = chat[11].split('#*%|%*#')[int(spl_data[2])]
+        text = chat[12].split('#*%|%*#')[int(spl_data[2])]
+        msg_text = f'Тригер\n{html(trigger)}\n\nТекст:\n{text}\n\nДля редагування тригера видаліть його і додайте новий.'
+        keyboard.add(types.InlineKeyboardButton(text='Видалити тригер',
+                                                callback_data=f'chat_trigger_delete_{spl_data[2]}_{spl_data[3]}'))
+        keyboard = menu_footer(keyboard, f'chat_messtrig_0_{spl_data[3]}')
+        bot.edit_message_text(chat_id=m.chat.id, message_id=m.message_id, text=msg_text, parse_mode='HTML',
+                              reply_markup=keyboard)
+        return
+
+    if spl_data[0] == 'chat' and spl_data[1] == 'addmesstrig':
+        chat = get_chat(int(spl_data[2]))
+
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard = menu_footer(keyboard, f'chat_messtrig_0_{spl_data[2]}')
+
+        def get_trig_name(m0):
+            if m0.text == 'СТОП':
+                bot.send_message(m.chat.id, f'Ви відмінили процедуру додавання тригера.', reply_markup=keyboard)
+                return
+            if len(m0.text) > 200:
+                bot.send_message(m.chat.id, f'Ви відмінили процедуру додавання тригера.', reply_markup=keyboard)
+                register_next_step_handler(m0, get_trig_name)
+                return
+
+            def get_trig_text(m1):
+                if m1.text == 'СТОП':
+                    bot.send_message(m.chat.id, f'Ви відмінили процедуру додавання тригера.', reply_markup=keyboard)
+                    return
+                if len(m0.text) > 200:
+                    bot.send_message(m.chat.id, f'Ви відмінили процедуру додавання тригера.', reply_markup=keyboard)
+                    register_next_step_handler(m0, get_trig_name)
+                    return
+
+                try:
+                    bot.send_message(thrash, m1.text, parse_mode='HTML')
+                except:
+                    bot.send_message(m.chat.id, f'давай по новой міша, всьо хуйня ', reply_markup=keyboard)
+                    return
+
+                chat[11] = m0.text if chat[11] == 'None' else f'{chat[11]}#*%|%*#{m0.text}'
+                chat[12] = m1.text if chat[12] == 'None' else f'{chat[12]}#*%|%*#{m1.text}'
+
+                insert_chat_a(chat)
+                bot.send_message(text='Тригер збережено', chat_id=m.chat.id, reply_markup=keyboard)
+            bot.send_message(text='Надішліть текст, який буде реакцією бота на тригер.',
+                                  chat_id=m.chat.id)
+            register_next_step_handler(m0, get_trig_text)
+
+        bot.edit_message_text(text='Надішліть тригер, на який реагуватиме бот.', message_id=m.message_id,
+                              chat_id=m.chat.id)
+        register_next_step_handler(m, get_trig_name)
+        return
+
+    if spl_data[0] == 'chat' and spl_data[1] == 'welcmess':
+        chat = get_chat(int(spl_data[2]))
+        keyboard = types.InlineKeyboardMarkup()
+        if chat[3] == 'None':
+            msg_text = 'Наразі у вашому чаті відсутнє привітальне повідомлення, проте ви можете ' \
+                   'додати його натиснувши на кнопку нижче.'
+            keyboard.add(types.InlineKeyboardButton('🆕 Додати привітальне повідомлення',
+                                                    callback_data=f'chat_addwelcmess_{spl_data[2]}'))
+        else:
+            msg_text = f'Привітальне повідомлення:\n\n{chat[3]}'
+
+            keyboard.add(types.InlineKeyboardButton('Редагувати привітальне повідомлення',
+                                                    callback_data=f'chat_editwelcmess_{spl_data[2]}'))
+            keyboard.add(types.InlineKeyboardButton('Вилучити привітальне повідомлення',
+                                                    callback_data=f'chat_delwelcmess_{spl_data[2]}'))
+
+        keyboard = menu_footer(keyboard, f'private_chat_{spl_data[2]}_next')
+        bot.edit_message_text(msg_text, chat_id=m.chat.id, message_id=m.message_id, parse_mode='HTML',
+                              reply_markup=keyboard)
+        return
+
+    if spl_data[0] == 'chat' and spl_data[1] in ('addwelcmess', 'editwelcmess'):
+        chat = get_chat(int(spl_data[2]))
+
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard = menu_footer(keyboard, f'private_chat_{spl_data[2]}_next')
+
+        def get_welc(m0):
+            if m0.text == 'СТОП':
+                bot.send_message(m.chat.id, f'Ви відмінили процедуру додавання привітального повідомлення.',
+                                 reply_markup=keyboard)
+                return
+            if len(m0.text) > 2000:
+                bot.send_message(m.chat.id, f'Більше 2000 символів.', reply_markup=keyboard)
+                register_next_step_handler(m0, get_trig_name)
+                return
+            try:
+                bot.send_message(thrash, m0.text, parse_mode='HTML')
+            except:
+                bot.send_message(m.chat.id, f'давай по новой міша, всьо хуйня ', reply_markup=keyboard)
+                return
+
+            chat[3] = m0.text
+            insert_chat_a(chat)
+            bot.send_message(text='Привітальне повідомлення збережено', chat_id=m.chat.id, reply_markup=keyboard)
+
+        bot.edit_message_text(text='Надішліть тригер, на який реагуватиме бот.', message_id=m.message_id,
+                              chat_id=m.chat.id)
+        register_next_step_handler(m, get_welc)
+        return
+
+    if spl_data[0] == 'chat' and spl_data[1] == 'delwelcmess':
+        chat = get_chat(int(spl_data[2]))
+
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard = menu_footer(keyboard, f'private_chat_{spl_data[2]}_next')
+
+        chat[3] = 'None'
+        insert_chat_a(chat)
+        bot.edit_message_text(text='Привітальне повідомлення вилучено.', message_id=m.message_id,
+                              chat_id=m.chat.id, reply_markup=keyboard)
+        return
+
+    if spl_data[0] == 'channel' and spl_data[1] == 'post':
+        channel = get_channel(int(spl_data[2]))
+
+        def get_post_message(m0):
+
+            def get_react(m1):
+                try:
+                    m_id = bot.copy_message(channel[1], m0.chat.id, m0.message_id).message_id
+                except:
+                    keyboard = menu_footer(types.InlineKeyboardMarkup(), f'private_channel_{spl_data[2]}')
+                    bot.send_message(m.chat.id, 'Виникла помилка', reply_markup=keyboard)
+                    return
+
+                spl_text = m1.text.split('\n')
+                reacts = []
+                votes = []
+                for i in range(len(spl_text)):
+                    reacts.append([])
+                    votes.append([])
+                    for j in spl_text[i].split('|'):
+                        reacts[i].append(str(j))
+                        votes[i].append([])
+                new_post(channel[1], m_id, str(reacts), str(votes))
+
+                keyboard = menu_footer(types.InlineKeyboardMarkup(), f'private_channel_{spl_data[2]}')
+                bot.send_message(m.chat.id, 'Готово', reply_markup=keyboard)
+
+            bot.send_message(text='Надішліть реакції.', chat_id=m.chat.id)
+            register_next_step_handler(m0, get_react)
+
+        bot.edit_message_text('Надішліть пост.', chat_id=m.chat.id, message_id=m.message_id)
+        register_next_step_handler(m, get_post_message, True)
+        return
+
+    if spl_data[0] == 'react':
+        x = int(spl_data[1])
+        y = int(spl_data[2])
+        channel = get_channel(m.chat.id)
+        if not channel:
+            return
+        keyboard = m.reply_markup
+        post = get_post(m.chat.id, m.message_id)
+        post[4] = eval(post[4])
+        voted = False
+        l_x, l_y = None, None
+        for i in range(len(post[4])):
+            for j in range(len(post[4][i])):
+                if u.id in post[4][i][j]:
+                    voted = True
+                    l_x = i
+                    l_y = j
+        if voted:
+            button = keyboard.keyboard[l_x][l_y]
+            react = ' '.join(button.text.split()[:-1])
+            num = int(button.text.split()[-1])
+            keyboard.keyboard[l_x][l_y] = types.InlineKeyboardButton(f'{react} {num-1}',
+                                                                     callback_data=f'react_{l_x}_{l_y}')
+            post[4][l_x][l_y].remove(u.id)
+            text = f'Ви забрали свою реакцію з "{react}"'
+            if x != l_x or y != l_y:
+                button = keyboard.keyboard[x][y]
+                react = ' '.join(button.text.split()[:-1])
+                num = int(button.text.split()[-1])
+                keyboard.keyboard[x][y] = types.InlineKeyboardButton(f'{react} {num + 1}',
+                                                                    callback_data=f'react_{x}_{y}')
+                post[4][x][y].append(u.id)
+                text = f'Ви змінили свою реакцію на "{react}"'
+        else:
+            button = keyboard.keyboard[x][y]
+            react = ' '.join(button.text.split()[:-1])
+            num = int(button.text.split()[-1])
+            keyboard.keyboard[x][y] = types.InlineKeyboardButton(f'{react} {num + 1}',
+                                                                 callback_data=f'react_{x}_{y}')
+            post[4][x][y].append(u.id)
+            text = f'Ви відреагували "{react}"'
+        bot.edit_message_reply_markup(m.chat.id, m.message_id, reply_markup=keyboard)
+        bot.answer_callback_query(call.id, text=text)
+        post[3] = str(post[3])
+        post[4] = str(post[4])
+        insert_post_a(post)
+        return
+
 
 @bot.message_handler(func=lambda m: m.chat.id == -1001452719524, content_types=['new_chat_members'])
 def new_chat_member_gr(m):
@@ -3199,8 +4443,8 @@ def new_chat_member_gr(m):
 
 @bot.message_handler(content_types=['new_chat_members'])
 def new_chat_members(m):
-    chat = m.chat
-    if m.new_chat_members[0].id == BOT_USER:
+    chat = get_chat(m.chat.id)
+    """if m.new_chat_members[0].id == BOT_USER:
         if get_chat(m.chat.id) is not None:
             return
         out = f'{chat.title}\n'
@@ -3218,42 +4462,141 @@ def new_chat_members(m):
             return
 
         new_chat(chat)
-        return
+        return"""
 
     for i in m.new_chat_members:
-        user = get_user(i.id)
-        if user is None:
-            try:
-                bot.restrict_chat_member(chat_id=m.chat.id, user_id=i.id)
-            except:
-                pass
-            keyboard = types.InlineKeyboardMarkup()
-            button = types.InlineKeyboardButton(text='🤖 Пройти авторизацію', url='t.me/yachminiya_bot')
-            keyboard.add(button)
-            bot.send_message(m.chat.id,
-                             f'<a href="tg://user?id={i.id}">{name(i)}</a>, вітаємо! Ти потрапив(ла) до Простору '
-                             f'Ячмінії, але для отримання права спілкування тобі треба пройти авторизацію за '
-                             f'кнопкою знизу',
-                             parse_mode='HTML', reply_markup=keyboard)
+        if i.id == BOT_USER:
+            out = f'{m.chat.title}\n'
+            out += f'{m.chat.id}\n'
+            if m.chat.username is not None:
+                out += f'{m.chat.username}\n\n'
+            if m.chat.description is not None:
+                out += f'{m.chat.description}'
+            # bot.send_message(-1001476087749, f'{out}')
 
-    chat_db = get_chat(chat.id)
-    welc = chat_db[3]
-    if welc == 'None':
+            if chat:
+                continue
+            if m.chat.type != 'supergroup':
+                bot.send_message(m.chat.id, f'Для коректної роботи бота група має бути супергрупою. Відкрийте '
+                                            f'історію чату, і група автоматично стане такою. Після цього додайте '
+                                            f'бота знову')
+                bot.leave_chat(m.chat.id)
+                return
+            admins = [0, 0]
+            cr = 0
+            for j in bot.get_chat_administrators(m.chat.id):
+                user = j.user
+                if j.status == 'creator':
+                    cr = user.id
+                else:
+                    if not get_user(user.id):
+                        continue
+                admins.append(user.id)
+            admins = list(map(lambda x: str(x), admins))
+            if cr:
+                new_chat(m.chat, 'Приватний', cr, admins)
+                keyboard = types.InlineKeyboardMarkup()
+                but = types.InlineKeyboardButton(text='До меню Простору Ячмінії',
+                                                 url='t.me/yachminiya_test_bot?start=prostir_menu')
+                keyboard.add(but)
+                bot.send_message(m.chat.id, f'Чат {m.chat.title} доданий до приватного Простору Ячмінії. '
+                                            f'Для коректної роботи бота власник чату має ввімкнути бота в меню'
+                                            f'Простору Ячмінії. Якщо виникли проблеми з доступом до власника, '
+                                            f'зверніться до {user_link(CREATOR, "Назарія фон Герсте")}.',
+                                 reply_markup=keyboard, parse_mode='HTML')
+                return
+            else:
+                bot.send_message(m.chat.id, f'Власник чату не може бути анонімним. Для додавання чату змініть права'
+                                            f' власника. Бот зараз лівне.')
+                bot.leave_chat(m.chat.id)
+                return
+
+        if chat[6] in ('Основний', 'Службовий'):
+            user = get_user(i.id)
+            if user is None:
+                try:
+                    bot.restrict_chat_member(chat_id=m.chat.id, user_id=i.id)
+                except:
+                    pass
+                keyboard = types.InlineKeyboardMarkup()
+                button = types.InlineKeyboardButton(text='🤖 Пройти авторизацію', url='t.me/yachminiya_bot')
+                keyboard.add(button)
+                bot.send_message(m.chat.id,
+                                 f'<a href="tg://user?id={i.id}">{name(i)}</a>, вітаємо! Ти потрапив(ла) до Простору '
+                                 f'Ячмінії, але для отримання права спілкування тобі треба пройти авторизацію за '
+                                 f'кнопкою знизу',
+                                 parse_mode='HTML', reply_markup=keyboard)
+                continue
+        if chat[8]:
+            welc = chat[3]
+            if welc == 'None':
+                return
+            welc_out = welc.replace('/enter/', '\n')
+            welc_out = welc_out.replace('/empty/', f'{chr(8205)}')
+            welc_out = welc_out.replace('/name/', f'{name(i.user)}')
+            bot.send_message(m.chat.id, welc_out, parse_mode='HTML', reply_to_message_id=m.message_id)
         return
-    welc_l = welc.split('{enter}')
-    welc_out = ''
-    for i in range(len(welc_l)):
-        welc_out += f'{welc_l[i]}\n'
-    welc_out = welc_out.replace('chr(8205)', f'{chr(8205)}')
-    welc_out = welc_out.replace('{name}', f'{name(m.new_chat_members[0])}')
-    bot.reply_to(m, welc_out, parse_mode='HTML')
 
 
 @bot.message_handler(content_types=["text"])
 def commands(m):
-    global aktyv, lakt, zhandarm, CREATOR, voting_q, del_pass, weekdays, global_user, t
+    global aktyv, lakt, zhandarm, CREATOR, voting_q, del_pass, weekdays, global_user, t, false_day
     tt = time.time()
     mess = m.text.split()
+
+    chat = get_chat(m.chat.id)
+    if m.chat.type != 'private':
+        if not chat:
+            bot.leave_chat(m.chat.id)
+            return
+        if m.text == '!чат':
+            bot.send_message(m.chat.id, 'чат')
+            return
+        if not chat[8]:
+            return
+
+    if m.from_user.id == 777000:
+        if not chat[14]:
+            return
+        channel_id = m.forward_from_chat.id
+        m_id = m.forward_from_message_id
+        chat_id = str(m.chat.id)[4:]
+        post = get_post(channel_id, m_id)
+        if not post:
+            return
+        keyboard = types.InlineKeyboardMarkup()
+        if post[3] == 'None':
+            return
+        else:
+            react = eval(post[3])
+            """react_spl = post[3].split('\n')
+            for i in range(len(react_spl)):
+                react.append([])
+                for j in react_spl[i].split('|'):
+                    react[i].append(j)"""
+            for i in range(len(react)):
+                keyboard.keyboard.append([])
+                for j in range(len(react[i])):
+                    keyboard.keyboard[i].append(types.InlineKeyboardButton(f'{react[i][j]} 0',
+                                                                           callback_data=f'react_{i}_{j}'))
+        but = types.InlineKeyboardButton(text='💬 Коментарі', url=f'https://t.me/c/{chat_id}/1?thread={m.message_id}')
+        keyboard.add(but)
+        bot.edit_message_reply_markup(channel_id, m_id, reply_markup=keyboard)
+
+    if m.reply_to_message:
+        """
+        if m.reply_to_message.from_user.id == 777000:
+            text_of_but = m.reply_to_message.reply_markup.keyboard[-1][-1].text
+            num = int(text_of_but.split()[1])
+            channel_id = m.reply_to_message.forward_from_chat.id
+            m_id = m.reply_to_message.forward_from_message_id
+            chat_id = str(m.chat.id)[4:]
+            but = types.InlineKeyboardButton(text=f'💬 {num+1}', url=f'https://t.me/c/{chat_id}/1?thread={m.message_id}')
+            keyboard = types.InlineKeyboardMarkup()
+            keyboard.add(but)
+            bot.edit_message_reply_markup(channel_id, m_id, reply_markup=keyboard)"""
+        # pprint(m.json)
+        pass
 
     man = get_user(m.from_user.id)
     man_pass = get_passport(m.from_user.id)
@@ -3281,11 +4624,29 @@ def commands(m):
     if m.forward_sender_name or m.forward_from or m.forward_from_chat or m.forward_from_message_id:
         return
 
+    try:
+        aktyv[m.from_user.id][0] = aktyv[m.from_user.id][0] + 1
+        aktyv[m.from_user.id][1] = aktyv[m.from_user.id][1] + len(m.text.split())
+        lakt += 1
+        if lakt > 14:
+            aktyv_r()
+    except:
+        aktyv[m.from_user.id] = [1, len(m.text.split())]
+        lakt += 1
+        if lakt > 14:
+            aktyv_r()
+
     if m.text[0] == '!':
         if f_queue(m):
             return
 
-    # TODO aktyv
+    if chat[11] != 'None' and m.chat.type == 'supergroup':
+        triggers = chat[11].split('#*%|%*#')
+        if m.text in triggers:
+            tr_text = chat[12].split('#*%|%*#')[triggers.index(m.text)]
+            bot.send_message(m.chat.id, tr_text, parse_mode='HTML')
+            return
+
     """if m.chat.type == 'private':
         msg = bot.forward_message(-1001344984878, m.chat.id, m.message_id)
         bot.reply_to(msg, f'{m.chat.id} {m.message_id}')
@@ -3305,6 +4666,12 @@ def commands(m):
 
     if m.chat.id == -1001404271371:
         bot.forward_message(-1001492661297, m.chat.id, m.message_id)"""
+
+    if m.text == '!оновити_бд':
+        if m.from_user.id != CREATOR:
+            return
+        update_all_db()
+        bot.send_message(m.chat.id, 'good')
 
     if mess[0] == '!п' or m.text == '!me' or m.text == '!pass':
         if len(mess) > 1:
@@ -3330,11 +4697,11 @@ def commands(m):
             t = 60
 
         if rig:
-            usr = get_user(m.from_user.id)
-            if usr is None:
+            passport = get_user(m.from_user.id)
+            if passport is None:
                 non_reg(m.from_user, m)
                 return
-            if not int(usr[6].split()[1]):
+            if not int(passport[6].split()[1]):
                 bot.send_message(m.from_user.id, 'Ви не маєте права на перегляд чужого паспорта.')
                 return
             try:
@@ -3409,16 +4776,51 @@ def commands(m):
         '''global_user = m.from_user
         t = Timer(int(mess[1]), timeout, args=(m.from_user, m))
         t.start()'''
-        if len(mess) < 2:
+        """if len(mess) < 2:
             bot.send_message(m.chat.id, 'йди нахуй')
-            return
+            return"""
         """for i in range(int(mess[1])):
             test_new_timer_pre(bot, m)"""
-        try:
+        """try:
             message = bot.send_message(mess[1], 'test', disable_notification=True)
             bot.delete_message(mess[1], message.message_id)
         except Exception as e:
-            print(e)
+            print(e)"""
+        # print(bot.get_chat_administrators(m.chat.id))
+        url = m.reply_to_message.entities[0].url
+        p_id = url.split('/')[-2].split('.')[1]
+        # bot.send_message(m.chat.id, get_str_passport(int(p_id)))
+        if simplify(get_str_passport(int(p_id))) == m.reply_to_message.text:
+            bot.send_message(m.chat.id, 'Дані документа актуальні')
+        else:
+            bot.send_message(m.chat.id, 'Дані документа не актуальні')
+
+    if mess[0] == '!рандом_актив':
+        if m.from_user.id != CREATOR:
+            return
+        passports = get_all_passports()
+        for i in passports:
+            i[23] = ' '.join([str(random.randint(0, 150 - i[0])) for _ in range(31)])
+            i[24] = ' '.join([str(random.randint(0, 500 - i[0])) for _ in range(31)])
+            insert_passport_l(i)
+        insert_all_passports_g(passports)
+
+    if mess[0] == '!очистити_актив':
+        if m.from_user.id != CREATOR:
+            return
+        passports = get_all_passports()
+        for i in passports:
+            i[23] = ' '.join(['0' for _ in range(31)])
+            i[24] = ' '.join(['0' for _ in range(31)])
+            insert_passport_l(i)
+        insert_all_passports_g(passports)
+
+    if mess[0] == '!день':
+        try:
+            false_day = int(mess[1])
+            bot.send_message(m.chat.id, f'день змінено на {false_day}')
+        except:
+            bot.send_message(m.chat.id, 'пішов нахуй')
 
     if mess[0] == '!топ' or mess[0] == '!кращий_топ':
         if mess[0] == '!топ':
@@ -3517,11 +4919,11 @@ def commands(m):
             t = 60
 
         if rig:
-            usr = get_user(m.from_user.id)
-            if usr is None:
+            passport = get_user(m.from_user.id)
+            if passport is None:
                 non_reg(m.from_user, m)
                 return
-            if not int(usr[6].split()[1]):
+            if not int(passport[6].split()[1]):
                 bot.send_message(m.from_user.id, 'Ви не маєте права на перегляд чужого паспорта.')
                 return
             try:
@@ -3610,7 +5012,7 @@ def commands(m):
         if pp_bus == 0 or pp_bus == 2:
             acc_g[9] = acc_g[9] - amount_m - comm
             acc_t[9] = acc_t[9] + amount_m
-            namep = f'<a href="tg://user?id={acc_t[1]}">{acc_t[2]} {acc_t[3]}</a>'
+            namep = f'{user_link(acc_t[1], acc_t[2], acc_t[3])}'
             money_t = acc_t[9]
         else:
             acc_g[9] = int(acc_g[9]) - amount_m - comm
@@ -3621,7 +5023,7 @@ def commands(m):
         msg = f'Державний Банк\n'
         msg += f'<b>Ячмінія</b>\n\n'
         msg += f'Переказ коштів\n'
-        msg += f'Відправник: <a href="tg://user?id={acc_g[1]}">{acc_g[2]} {acc_g[3]}</a> ({acc_g[9]})\n'
+        msg += f'Відправник: {user_link(acc_g[1], acc_g[2], acc_g[3])} ({acc_g[9]})\n'
         msg += f'Отримувач: {namep} ({money_t})\n'
         msg += f'Сума переказу: {amount_m} {glas(amount_m)}\n'
         msg += f'Комісія: {comm} {glas(comm)}\n'
@@ -3635,7 +5037,7 @@ def commands(m):
             msg = f'Державний Банк\n'
             msg += f'<b>Ячмінія</b>\n\n'
             msg = f'На ваш рахунок переказали кошти\n'
-            msg += f'Відправник: <a href="tg://user?id={acc_g[1]}">{acc_g[2]} {acc_g[3]}</a> ({acc_g[9]})\n'
+            msg += f'Відправник: {user_link(acc_g[1], acc_g[2], acc_g[3])} ({acc_g[9]})\n'
             msg += f'Сума переказу: {amount_m} {glas(amount_m)}\n'
             if description is not None:
                 msg += f'Призначення переказу: {description}'
@@ -3649,7 +5051,7 @@ def commands(m):
             msg = f'Державний Банк\n'
             msg += f'<b>Ячмінія</b>\n\n'
             msg += f'На рахунок вашого підприємства переказали кошти\n'
-            msg += f'Відправник: <a href="tg://user?id={acc_g[1]}">{acc_g[2]} {acc_g[3]}</a> ({acc_g[9]})\n'
+            msg += f'Відправник: {user_link(acc_g[1], acc_g[2], acc_g[3])} ({acc_g[9]})\n'
             msg += f'Отримувач: {namep} ({money_t})\n'
             msg += f'Сума переказу: {amount_m} {glas(amount_m)}\n'
             if description is not None:
@@ -3774,11 +5176,11 @@ def commands(m):
             bot.reply_to(m, 'Ви не маєте права виконувати цю команду')
             return
         try:
-            usr = bot.forward_message(thrash, m.chat.id, m.reply_to_message.message_id).forward_from
+            passport = bot.forward_message(thrash, m.chat.id, m.reply_to_message.message_id).forward_from
             bot.delete_message(m.chat.id, m.reply_to_message.message_id)
         except:
             return
-        if usr is not None:
+        if passport is not None:
             frw = True
         else:
             frw = False
@@ -3786,15 +5188,15 @@ def commands(m):
         for i in range(m.reply_to_message.message_id + 1, m.message_id):
             try:
                 if frw:
-                    usr = bot.forward_message(thrash, m.chat.id, i).forward_from
-                    if usr is not None:
-                        if usr.id == m.reply_to_message.from_user.id:
+                    passport = bot.forward_message(thrash, m.chat.id, i).forward_from
+                    if passport is not None:
+                        if passport.id == m.reply_to_message.from_user.id:
                             bot.delete_message(m.chat.id, i)
                 else:
                     mess = bot.forward_message(thrash, m.chat.id, i)
-                    usr = mess.forward_from
+                    passport = mess.forward_from
                     usr_name = mess.forward_sender_name
-                    if usr is None:
+                    if passport is None:
                         if usr_name == name(m.reply_to_message.from_user):
                             bot.delete_message(m.chat.id, i)
             except:
@@ -3842,37 +5244,60 @@ def commands(m):
         except:
             pass
 
-    """if m.text == '!оновити_актив':
+    if m.text == '!оновити_актив':
         aktyv_r()
         bot.reply_to(m, 'Таблицю активності успішно оновлено!')
-        return"""
+        return
 
-    if mess[0] == '!інфо':
+    if mess[0] in ('!інфо', '!а'):
         if m.reply_to_message is not None:
             u = m.reply_to_message.from_user
         else:
             u = m.from_user
-        usr = get_user(u.id)
-        if usr is None:
-            non_reg(u, m)
+        passport = get_passport(u.id)
+        if passport is None:
+            bot.send_message(m.chat.id, f"{user_link(u.id, name(u))} не має правового зв'язку з Ячмінією")
             return
-        all_users = get_all_users()
+        all_passports = get_all_passports()
         all_messages = 0
         all_words = 0
-        for i in all_users:
-            all_messages += i[7]
-            all_words += i[8]
+        for i in all_passports:
+            all_messages += sum(map(lambda x: int(x), i[23].split()))
+            all_words += sum(map(lambda x: int(x), i[24].split()))
+        if not (all_messages or all_words):
+            bot.send_message(m.chat.id, 'Дані відсутні')
+            return
+
+        messages = sum(map(lambda x: int(x), passport[23].split()))
+        words = sum(map(lambda x: int(x), passport[24].split()))
+        per_mess = messages / all_messages
+        per_words = words / all_words
 
         if len(mess) == 1:
-            out = f'Активність\n<a href="tg://user?id={u.id}">{html(name(u))}</a>\n\n'
-            out += f'Репутація: {usr[3]}\n'
-            out += f'Повідомлень за весь час: {usr[7]}\n'
-            out += f'Слів за весь час: {usr[8]}\n'
-            out += f"Процент активу: {round(((usr[7] / all_messages) + (usr[8] / all_words)) * 50, 2)}%"
+            out = f'Інформація\n{user_link(passport[1], passport[2], passport[3])}\n\n'
+            out += f'Код: <code>{passport[18]}</code>\n'
+            out += f'Репутація: {passport[19]}\n'
+            out += f'Повідомлень за місяць: {messages}\n'
+            out += f'Слів за місяць: {words}\n'
+            out += f"Процент активу: {round((per_mess + per_words) * 50, 2)}%"
             bot.send_message(m.chat.id, out, parse_mode='HTML')
             return
 
-        if mess[1].lower() == 'тиждень':
+        if mess[0] != '!а':
+            bot.send_message(m.chat.id, 'Неправильний формат даних')
+            return
+
+        if mess[1].isdigit:
+            check_day = int(mess[1]) - 1
+        else:
+            bot.send_message(m.chat.id, 'Неправильний формат даних')
+            return
+
+        if check_day not in range(0, 31):
+            bot.send_message(m.chat.id, 'Неправильний формат даних')
+            return
+
+        """if mess[1].lower() == 'тиждень':
             word1 = 'Тижнева'
             word2 = 'тиждень'
             day = None
@@ -3915,11 +5340,11 @@ def commands(m):
         if one_day:
             all_msgs = 0
             all_words = 0
-            msg = int(usr[11].split()[day])
-            word = int(usr[12].split()[day])
-            for i in all_users:
-                all_msgs += int(i[11].split()[day])
-                all_words += int(i[12].split()[day])
+            msg = int(passport[23].split()[day])
+            word = int(passport[24].split()[day])
+            for i in all_passports:
+                all_msgs += int(i[23].split()[day])
+                all_words += int(i[24].split()[day])
             m_per = msg / all_msgs
             w_per = word / all_words
             percent = round((m_per + w_per) * 50, 2)
@@ -3928,11 +5353,11 @@ def commands(m):
             word = 0
             all_msgs = 0
             all_words = 0
-            msgs = usr[11].split()
-            words = usr[12].split()
-            for i in all_users:
-                msg_l = i[11].split()
-                word_l = i[12].split()
+            msgs = passport[23].split()
+            words = passport[24].split()
+            for i in all_passports:
+                msg_l = i[23].split()
+                word_l = i[24].split()
                 for j in range(len(msg_l)):
                     all_msgs += int(msg_l[j])
                     all_words += int(word_l[j])
@@ -3942,12 +5367,35 @@ def commands(m):
                 word += int(words[i])
             m_per = msg / all_msgs
             w_per = word / all_words
-            percent = round((m_per + w_per) * 50, 2)
+            percent = round((m_per + w_per) * 50, 2)"""
 
-        out = f'{word1} активність\n'
+        all_msgs = 0
+        all_words = 0
+        msg = int(passport[23].split()[check_day])
+        word = int(passport[24].split()[check_day])
+        for i in all_passports:
+            all_msgs += int(i[23].split()[check_day])
+            all_words += int(i[24].split()[check_day])
+        if not (all_msgs or all_words):
+            bot.send_message(m.chat.id, 'Дані відсутні')
+            return
+        m_per = msg / all_msgs
+        w_per = word / all_words
+        percent = round((m_per + w_per) * 50, 2)
+
+        if false_day:
+            day = false_day
+        else:
+            day = datetime.today().day
+        month = datetime.today().month
+        if check_day + 1 > day:
+            month = month_num[month - 2]
+        str_date = f'{check_day + 1} {months[month][0]}'
+
+        out = f'Активність за {str_date}\n'
         out += f'<a href="tg://user?id={u.id}">{html(name(u))}\n\n</a>'
-        out += f'Повідомлень за {word2}: {msg}\n'
-        out += f'Слів за {word2}: {word}\n'
+        out += f'Повідомлень: {msg}\n'
+        out += f'Слів: {word}\n'
         out += f"Процент активу: {percent}%"
         bot.send_message(m.chat.id, out, parse_mode='HTML')
 
@@ -4060,7 +5508,7 @@ def commands(m):
         zhan[4] += 1
         insert_zhan_a(zhan)
 
-    if m.text == '!додати_чат':
+    """if m.text == '!додати_чат':
         if m.chat.type == 'private':
             return
         user = get_user(m.from_user.id)
@@ -4073,7 +5521,7 @@ def commands(m):
         user[9] += f' {number}'
         insert_user_a(user)
         bot.reply_to(m, 'Цей чат успішно додано до вашого Простору Ячмінії!')
-        return
+        return"""
 
     if m.text == '!помилування':
         if m.chat.type == 'private':
@@ -4118,154 +5566,86 @@ def commands(m):
 
     # голосування. початок та завершення
 
-    if mess[0] == '!найактивніші':
-        if len(mess) == 1:
-            word_vars = None
-            day = False
-            week = False
-            am_n = 10
-        elif len(mess) == 2:
-            if mess[1].isdigit():
-                word_vars = None
-                am_n = int(mess[1])
-                day = False
-                week = False
-            else:
-                if mess[1].lower() == 'тиждень':
-                    word_vars = 'тиждень'
-                    day = False
-                    week = True
-                    am_n = 10
-                else:
-                    try:
-                        word_vars = weekdays[mess[1].lower()]
-                        day = True
-                        week = False
-                        am_n = 10
-                    except:
-                        bot.send_message(m.chat.id, 'Неправильний формат!')
-                        return
-        elif len(mess) == 3:
-            if mess[1].isdigit():
-                n = 1
-                d = 2
-            elif mess[2].isdigit():
-                n = 2
-                d = 1
+    if mess[0].split('_')[0] == '!найактивніші':
+        if len(mess[0].split('_')) == 2:
+            if mess[0].split('_')[1].isdigit():
+                am_n = int(mess[0].split('_')[1])
             else:
                 bot.send_message(m.chat.id, 'Неправильний формат!')
                 return
-            am_n = int(mess[n])
-            if mess[d].lower() == 'тиждень':
-                word_vars = 'тиждень'
-                day = False
-                week = True
-            elif mess[d].lower() == 'сьогодні':
-                word_vars = (datetime.today().weekday(), 'сьогодні')
-                day = True
-                week = False
-            elif mess[d].lower() == 'вчора':
-                day = datetime.today().weekday() - 1
-                if day < 0:
-                    day += 7
-                word_vars = (day, 'вчора')
-                day = True
-                week = False
-            elif mess[d].lower() == 'позавчора':
-                day = datetime.today().weekday() - 2
-                if day < 0:
-                    day += 7
-                word_vars = (day, 'позавчора')
-                day = True
-                week = False
-            elif mess[d].lower() == 'завтра':
-                time.sleep(0.2)
-                bot.send_message(m.chat.id, 'Я, по твоєму, схожа на Вангу?')
-                return
-            elif mess[d].lower() == 'післязавтра':
-                time.sleep(0.2)
-                bot.send_message(m.chat.id, 'Ну це вже не лізе в жодні рамки. Що ти хочеш від мене?')
-                return
-            else:
-                try:
-                    word_vars = weekdays[mess[d].lower()]
-                    day = True
-                    week = False
-                except:
-                    bot.send_message(m.chat.id, 'Неправильний формат!')
-                    return
+        elif len(mess[0].split('_')) == 1:
+            am_n = 10
         else:
             bot.send_message(m.chat.id, 'Неправильний формат!')
             return
 
-        users = get_all_users()
-        if am_n > len(users):
-            am_n = len(users)
-        elif am_n > 30:
-            am_n = 30
-
-        if week:
-            msg_out = 'Найактивніші за тиждень\n'
-            all_msgs = 0
-            all_words = 0
-            akt = []
-            for i in range(len(users)):
-                akt.append([users[i][2], 0, 0, 0, users[i][5]])
-                for j in users[i][11].split():
-                    all_msgs += int(j)
-                    akt[i][1] += int(j)
-                for j in users[i][12].split():
-                    all_words += int(j)
-                    akt[i][2] += int(j)
-        elif day:
-            msg_out = f'Найактивніші за {word_vars[1]}\n'
-            all_msgs = 0
-            all_words = 0
-            akt = []
-            for i in range(len(users)):
-                akt.append([users[i][2], 0, 0, 0, users[i][5]])
-                msg_list = users[i][11].split()
-                word_list = users[i][12].split()
-                all_msgs += int(msg_list[word_vars[0]])
-                akt[i][1] = int(msg_list[word_vars[0]])
-                all_words += int(word_list[word_vars[0]])
-                akt[i][2] = int(word_list[word_vars[0]])
+        if len(mess) == 1:
+            alltime = True
+            check_day = None
+        elif len(mess) == 2:
+            if mess[1].isdigit():
+                alltime = False
+                check_day = (True, int(mess[1]) - 1)
+                if check_day[1] not in range(0, 31):
+                    bot.send_message(m.chat.id, 'Неправильний формат даних')
+                    return
+            elif mess[1].lower() == 'тиждень':
+                alltime = False
+                check_day = (False, 'тиждень')
+            else:
+                bot.send_message(m.chat.id, 'Неправильний формат!')
+                return
         else:
-            msg_out = f'Найактивніші\n'
-            all_msgs = 0
-            all_words = 0
-            akt = []
-            for i in range(len(users)):
-                akt.append([users[i][2], 0, 0, 0, users[i][5]])
-                all_msgs += int(users[i][7])
-                akt[i][1] = int(users[i][7])
-                all_words += int(users[i][8])
-                akt[i][2] = int(users[i][8])
+            bot.send_message(m.chat.id, 'Неправильний формат!')
+            return
 
-        for i in range(len(users)):
-            akt[i][3] = ((akt[i][1] / all_msgs) + (akt[i][2] / all_words)) * 50
-        for i in range(len(users)):
-            for j in range(i, len(users)):
-                if akt[i][3] < akt[j][3]:
-                    akt[i], akt[j] = akt[j], akt[i]
-        long = False
+        passports = get_all_passports()
+        if am_n > len(passports):
+            am_n = len(passports)
+        elif am_n > 40:
+            am_n = 40
+
+        if alltime:
+            for i in passports:
+                i[23] = sum(map(lambda y: int(y), i[23].split()))
+                i[24] = sum(map(lambda y: int(y), i[24].split()))
+            in_word = ''
+        else:
+            if check_day[0]:
+                for i in passports:
+                    i[23] = int(i[23].split()[check_day[1]])
+                    i[24] = int(i[24].split()[check_day[1]])
+
+                if false_day:
+                    day = false_day
+                else:
+                    day = datetime.today().day
+                month = datetime.today().month
+                if check_day[1] + 1 > day:
+                    month = month_num[month - 2]
+                in_word = f' за {check_day[1] + 1} {months[month][0]}'
+            else:
+                return
+        all_messages = sum((i[23] for i in passports))
+        all_words = sum((i[24] for i in passports))
+        percentages = [[i[1], round((((i[23] / all_messages) + (i[24] / all_words)) * 50), 2)] for i in passports]
+        percentages.sort(key=itemgetter(1), reverse=True)
+
+        msg_out = f'Найактивніші{in_word}\n'
+        long_len = len(str(percentages[0][1]))
+        for i in percentages:
+            i[0] = get_passport(i[0])
+            if round(i[1], 1) == i[1]:
+                zero = '0'
+                minus = 1
+            else:
+                zero = ''
+                minus = 0
+            i[1] = f'<code>{" " * (long_len - len(str(i[1])) - minus)}{i[1]}{zero}% </code>'
         for i in range(am_n):
-            buf = str(round(akt[i][3], 2))
-            if len(buf) == 5:
-                long = True
-            if long:
-                prob = ' '
-            else:
-                prob = ''
-            if len(buf) == 3:
-                ins = f'{prob}{buf}0'
-            elif len(buf) == 4:
-                ins = f'{prob}{buf}'
-            else:
-                ins = buf
-            msg_out += f'<code>{ins}% </code><a href="t.me/{akt[i][4]}">{html(akt[i][0])}</a>\n'
-
-        bot.send_message(m.chat.id, msg_out, parse_mode='HTML', disable_web_page_preview=True)
+            msg_out += f'{percentages[i][1]}' \
+                       f'<a href="t.me/{percentages[i][0][5]}">{percentages[i][0][2]} {percentages[i][0][3]}</a>\n'
+        bot.send_message(m.chat.id, msg_out, disable_web_page_preview=True, parse_mode='HTML')
 
     if m.text.split()[0] == '!права':
         if m.from_user.id != CREATOR:
@@ -4319,25 +5699,25 @@ def commands(m):
             bot.send_message(m.chat.id, f'Неправильний формат')
             return
 
-        if m.text.split()[0] == '!пов':
-            if m.from_user.id != CREATOR:
-                return
-            id_t = int(m.text.split()[1])
-            text = ' '.join(m.text.split()[2:])
-            try:
-                bot.send_message(id_t, text)
-            except:
-                pass
-        if m.text.split()[0] == '!повр':
-            if m.from_user.id != CREATOR:
-                return
-            id_t = int(m.text.split()[1])
-            rep_id = int(m.text.split()[2])
-            text = ' '.join(m.text.split()[3:])
-            try:
-                bot.send_message(id_t, text, reply_to_message_id=rep_id)
-            except:
-                pass
+    if m.text.split()[0] == '!пов':
+        if m.from_user.id != CREATOR:
+            return
+        id_t = int(m.text.split()[1])
+        text = ' '.join(m.text.split()[2:])
+        try:
+            bot.send_message(id_t, text)
+        except:
+            pass
+    if m.text.split()[0] == '!повр':
+        if m.from_user.id != CREATOR:
+            return
+        id_t = int(m.text.split()[1])
+        rep_id = int(m.text.split()[2])
+        text = ' '.join(m.text.split()[3:])
+        try:
+            bot.send_message(id_t, text, reply_to_message_id=rep_id)
+        except:
+            pass
 
     if m.text.split()[0] in ('!нарахувати', '!списати'):
         user = get_user(m.from_user.id)
@@ -4413,7 +5793,7 @@ def commands(m):
                 acc_t[9] = acc_t[9] + amount_m
             else:
                 acc_t[9] = acc_t[9] - amount_m
-            namep = f'<a href="tg://user?id={acc_t[1]}">{acc_t[2]} {acc_t[3]}</a>'
+            namep = f'{user_link(acc_t[1], acc_t[2], acc_t[3])}'
             money_t = acc_t[9]
         else:
             if plus:
@@ -4505,7 +5885,7 @@ def commands(m):
         passport[8] = new_san
         passport[11] = bill
         bot.send_message(m.chat.id, 'Сан змінено')
-        out = f'<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>\n{old_san} ⟹ {new_san}'
+        out = f'{user_link(passport[1], passport[2], passport[3])}\n{old_san} ⟹ {new_san}'
         # bot.send_message(-1001268255961, out, parse_mode='HTML')
         insert_passport_a(passport)
         insert_user_a(user_s)
@@ -4600,10 +5980,10 @@ def commands(m):
 
         business_out = get_str_business(pidp_id)
 
-        bot.send_message(m.chat.id, business_out, parse_mode='HTML')
+        bot.send_message(m.chat.id, business_out, parse_mode='HTML', disable_web_page_preview=True)
         return
 
-    if m.text.split()[0] == '!рід':
+    if mess[0] == '!рід':
 
         if len(m.text.split()) < 2:
             bot.send_message(m.chat.id, 'Неправильний формат!')
@@ -4614,6 +5994,17 @@ def commands(m):
         bot.send_message(m.chat.id, rid_out, parse_mode='HTML', disable_web_page_preview=True)
         if m.chat.id == -1001329014820:
             bot.send_message(m.chat.id, time.time() - tt)
+        return
+
+    if mess[0] == '!установа':
+        if len(m.text.split()) < 2:
+            bot.send_message(m.chat.id, 'Неправильний формат!')
+            return
+        ust_id = ' '.join(mess[1:])
+
+        inst_out = get_str_institution(ust_id)
+
+        bot.send_message(m.chat.id, inst_out, parse_mode='HTML', disable_web_page_preview=True)
         return
 
     if m.chat.id == -1001486037908:
@@ -4727,7 +6118,7 @@ def commands(m):
             passport = get_passport(ms.from_user.id)
             if passport is not None:
                 bot.send_message(m.chat.id,
-                                 f'<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a> вже має '
+                                 f'{user_link(passport[1], passport[2], passport[3])} вже має '
                                  f'громадянство Ячмінії!',
                                  parse_mode='HTML')
                 return
@@ -4841,7 +6232,7 @@ def commands(m):
                                                 callback_data='stop_vidmova')
             keyboard.add(button)
             bot.send_message(m.chat.id,
-                             text=f'<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>, '
+                             text=f'{user_link(passport[1], passport[2], passport[3])}, '
                                   f'Ви справді відмовляєтесь від громадянства Ячмінії? Ви втратите всі '
                                   f'свої статки. Для підтвердження натисніть кнопку нижче.',
                              reply_markup=keyboard, parse_mode='HTML')
@@ -4911,7 +6302,7 @@ def commands(m):
                 button = types.InlineKeyboardButton(text='✅ Підтвердити', callback_data='up_status')
                 keyboard.add(button)
                 bot.send_message(m.chat.id,
-                                 f'<a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a> не виконав усі '
+                                 f'{user_link(passport[1], passport[2], passport[3])} не виконав усі '
                                  f'підстави для отримання повного статусу громадянства. Для отримання цього статусу '
                                  f'необхідне підтвердження Старшого Жандарма або Протектора.',
                                  parse_mode='HTML', reply_markup=keyboard)
@@ -4945,7 +6336,7 @@ def commands(m):
             try:
                 bot.send_message(m.reply_to_message.entities[0].user.id,
                                  f'Вам відмовлено у задоволенні позову\nПричина:\n{" ".join(m.text.split()[1:])}\nВам '
-                                 f'відмовив Суддя <a href="tg://user?id={passport[1]}">{passport[2]} {passport[3]}</a>',
+                                 f'відмовив Суддя {user_link(passport[1], passport[2], passport[3])}',
                                  parse_mode='HTML')
                 bot.send_message(m.chat.id, 'Відмова доставлена')
             except Exception as e:
@@ -4976,6 +6367,90 @@ def commands(m):
             keyboard.add(callback_button)
 
             bot.send_message(m.chat.id, f'Перевірка кворуму\n\nПрисутні:', reply_markup=keyboard)
+
+
+@bot.message_handler(content_types=['photo', 'audio', 'document', 'video', 'voice', 'sticker', 'video_note'])
+def media(m):
+    chat = get_chat(m.chat.id)
+    if m.chat.type != 'private':
+        if not chat:
+            bot.leave_chat(m.chat.id)
+            return
+        if not chat[8]:
+            return
+
+    if m.from_user.id == 777000:
+        if not chat[14]:
+            return
+        channel_id = m.forward_from_chat.id
+        m_id = m.forward_from_message_id
+        chat_id = str(m.chat.id)[4:]
+        post = get_post(channel_id, m_id)
+        if not post:
+            return
+        keyboard = types.InlineKeyboardMarkup()
+        if post[3] == 'None':
+            return
+        else:
+            react = eval(post[3])
+            """react_spl = post[3].split('\n')
+            for i in range(len(react_spl)):
+                react.append([])
+                for j in react_spl[i].split('|'):
+                    react[i].append(j)"""
+            for i in range(len(react)):
+                keyboard.keyboard.append([])
+                for j in range(len(react[i])):
+                    keyboard.keyboard[i].append(types.InlineKeyboardButton(f'{react[i][j]} 0',
+                                                                           callback_data=f'react_{i}_{j}'))
+        but = types.InlineKeyboardButton(text='💬 Коментарі', url=f'https://t.me/c/{chat_id}/1?thread={m.message_id}')
+        keyboard.add(but)
+        bot.edit_message_reply_markup(channel_id, m_id, reply_markup=keyboard)
+
+
+@bot.channel_post_handler()
+def channel_handler(m):
+    channel = get_channel(m.chat.id)
+    if not channel:
+        admins = [0, 0]
+        cr = 0
+        for j in bot.get_chat_administrators(m.chat.id):
+            user = j.user
+            if j.status == 'creator':
+                cr = user.id
+            else:
+                if not get_user(user.id):
+                    continue
+            admins.append(user.id)
+        # admins.remove(BOT_USER)
+        admins = list(map(lambda x: str(x), admins))
+        if cr:
+            new_channel(m.chat, 'Приватний', cr, admins)
+            keyboard = types.InlineKeyboardMarkup()
+            but = types.InlineKeyboardButton(text='До меню Простору Ячмінії',
+                                             callback_data='prostir_menu')
+            keyboard.add(but)
+            try:
+                bot.send_message(cr, f'Канал {m.chat.title} доданий до приватного Простору Ячмінії. '
+                                     f'Для коректної роботи бота ви маєте ввімкнути бота в меню'
+                                     f'Простору Ячмінії. Якщо виникли проблеми, '
+                                     f'зверніться до {user_link(CREATOR, "Назарія фон Герсте")}.',
+                                 reply_markup=keyboard, parse_mode='HTML')
+            except:
+                pass
+        else:
+            bot.leave_chat(m.chat.id)
+            return
+
+    """if m.chat.id == -1001227651426:
+        if m.text.lower() == 'ввімкнути захист':
+            script_on_func()
+        elif m.text.lower() == 'вимкнути захист':
+            script_off_func()
+        elif m.text.lower() == 'ввімкнути захист тест':
+            script_on_func(True)
+        elif m.text.lower() == 'вимкнути захист тест':
+            script_off_func(True)"""
 
 
 def main():
